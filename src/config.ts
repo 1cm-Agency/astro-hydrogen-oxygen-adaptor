@@ -23,6 +23,8 @@ export interface OxygenEnv {
   PUBLIC_STOREFRONT_ID?: string;
   PUBLIC_CHECKOUT_DOMAIN?: string;
   SESSION_SECRET?: string;
+  /** The shop's ID, which `<ShopifyScripts />` needs for analytics. */
+  SHOP_ID?: string;
   [key: string]: unknown;
 }
 
@@ -48,6 +50,34 @@ export interface HydrogenLocals {
   shopifyRequestContext: ShopifyRequestContext;
   /** The session Hydrogen route handlers use. Undefined while prerendering. */
   shopifySession?: HydrogenSessionManager;
+  /** Where the buyer is, from Oxygen's `oxygen-buyer-*` headers. Undefined while prerendering. */
+  buyer?: OxygenBuyer;
+}
+
+/**
+ * The buyer's location as Oxygen geolocates it. A field is undefined when Oxygen sends no value.
+ * Locally, MiniOxygen fills these with San Francisco defaults.
+ */
+export interface OxygenBuyer {
+  /** The IP address from your `getBuyerIp` hook; `oxygen-buyer-ip` by default. */
+  ip?: string;
+  /** ISO 3166-1 alpha-2 country code, such as `US`. */
+  country?: string;
+  /** Region name, such as `California`. */
+  region?: string;
+  /** Region code, such as `CA`. */
+  regionCode?: string;
+  city?: string;
+  postalCode?: string;
+  /** Continent code, such as `NA`. */
+  continent?: string;
+  latitude?: number;
+  longitude?: number;
+  /** IANA time zone, such as `America/Los_Angeles`. */
+  timezone?: string;
+  /** Nielsen DMA code, US only. */
+  metroCode?: string;
+  isEuCountry: boolean;
 }
 
 /** The session storage Hydrogen route handlers read and write. */

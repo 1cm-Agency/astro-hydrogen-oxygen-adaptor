@@ -83,12 +83,48 @@ Hydrogen fills in `$country` and `$language` from the request's market. Results 
 | `shopifyRequestContext` | Hydrogen's request context: `i18n`, cookies, and response headers. |
 | `shopifySession` | The session Hydrogen route handlers use. Undefined while prerendering. |
 | `oxygen` | `{ env, cache, waitUntil }` from the Oxygen Worker. Undefined while prerendering. |
+| `buyer` | The buyer's location from Oxygen's headers: `country`, `region`, `regionCode`, `city`, `postalCode`, `continent`, `latitude`, `longitude`, `timezone`, `metroCode`, `isEuCountry` and `ip`. Undefined while prerendering. |
 
 The client type depends on what's available:
 
 - **`private`**: you have `PRIVATE_STOREFRONT_API_TOKEN` and Oxygen's `oxygen-buyer-ip` header.
 - **`private_no_buyer_context`**: you have the private token and the page is prerendered.
 - **`public`**: everything else. It runs tokenless when `PUBLIC_STOREFRONT_API_TOKEN` is unset.
+
+### Analytics, consent and Perf Kit
+
+Render `<ShopifyScripts />` once in your layout's `<head>`:
+
+```astro
+---
+import ShopifyScripts from 'astro-hydrogen/components/ShopifyScripts.astro';
+---
+<head>
+  <ShopifyScripts consent={{ mode: 'default-banner' }} />
+</head>
+```
+
+It loads Shopify's analytics, the Customer Privacy API (with Shopify's banner when you choose `default-banner`) and Perf Kit, then starts them in the browser. Page view events are sent on load and after `<ClientRouter />` navigations. The consent request goes through the adapter's Storefront API proxy, which sets Shopify's `_shopify_essential`, `_shopify_analytics` and `_shopify_marketing` cookies.
+
+The shop comes from `SHOP_ID`, `PUBLIC_STOREFRONT_ID` and `PUBLIC_STORE_DOMAIN` (all set by `shopify hydrogen env pull`), and the market from your `i18n` config. Props:
+
+| Prop | |
+| --- | --- |
+| `consent` | `{ mode: 'no-banner' \| 'default-banner' \| 'custom-banner' }`. Defaults to `no-banner`. |
+| `shop`, `i18n` | Override the env values or the market. Pass `i18n={{ currency: 'USD' }}` so analytics knows the currency. |
+| `account`, `inbox` | Load the `shopify-account` and `shopify-chat` components. |
+| `shopifyAnalytics`, `analytics`, `debug`, `nonce`, `webMcp` | Passed through to Hydrogen. |
+| `initialize` | Set `false` to call `initializeShopifyScripts()` yourself, for example to pass a `custom-banner` `setup` callback, which can't be serialized from the server. |
+
+Without a shop ID, as with mock.shop, it renders nothing and logs one warning. Publish product, collection and cart events from your own scripts through `window.Shopify.analytics` (see Hydrogen's `AnalyticsEvent`).
+
+### Buyer location
+
+```astro
+{Astro.locals.buyer?.postalCode && <p>Delivery estimate for {Astro.locals.buyer.postalCode}</p>}
+```
+
+On Oxygen these values come from Shopify's edge. Locally, MiniOxygen fills them with San Francisco defaults. A page that reads `buyer` must be server-rendered, because a prerendered page has no buyer.
 
 ### Prerendered pages
 
@@ -172,7 +208,9 @@ dist/
 
 - **Images**: Sharp can't run in a Worker, so the default image service becomes the passthrough service. Request resized Shopify images from the Storefront API instead: `url(transform: { maxWidth: 400 })`.
 - **Astro sessions** have no driver configured by default. Configure `session.driver` yourself if you need it.
-- **Node APIs**: The Worker targets Oxygen's Workers runtime, so dependencies must be Web-compatible.
+- **Node APIs**: Oxygen runs Workers with no Node.js compatibility, so dependencies must be Web-compatible. The build fails with a list of offenders if the Worker imports a `node:*` module statically. Dynamic `import('node:…')` fallbacks, like the one in `@astrojs/react`, are turned into rejected promises.
+- **UI frameworks**: Framework islands work as usual. In dev, CommonJS server dependencies must be pre-bundled for workerd; React is handled for you, and ESM-only frameworks such as Preact need nothing. Add others to `vite.environments.ssr.optimizeDeps.include`.
+- **Raw buyer headers**: The parsed `locals.buyer` covers the documented headers. The raw `oxygen-buyer-*` headers are still on `Astro.request.headers`.
 
 ## License
 

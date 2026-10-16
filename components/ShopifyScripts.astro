@@ -1,0 +1,41 @@
+---
+/**
+ * Shopify's storefront scripts: analytics, the Customer Privacy API and consent banner, Perf Kit,
+ * and optionally Inbox and customer accounts. Render it once, in the `<head>` of your layout.
+ *
+ * The shop comes from `SHOP_ID`, `PUBLIC_STOREFRONT_ID` and `PUBLIC_STORE_DOMAIN`, and the market
+ * from your `i18n` config. In the browser it calls `initializeShopifyScripts()`, which sends page
+ * view events, including after `<ClientRouter />` navigations.
+ */
+import type { HydrogenLocals } from 'astro-hydrogen/config';
+import {
+  resolveShopifyScripts,
+  serializeForScript,
+  type ShopifyScriptsProps,
+} from 'astro-hydrogen/runtime/shopify-scripts';
+import { routeTemplates } from 'astro-hydrogen/runtime/user-config';
+
+type Props = ShopifyScriptsProps;
+
+const scripts = resolveShopifyScripts({
+  locals: Astro.locals as HydrogenLocals,
+  routeTemplates,
+  props: Astro.props,
+});
+---
+
+{scripts && <Fragment set:html={scripts.tags.join('')} />}
+{
+  scripts?.init && (
+    <script type="application/json" data-astro-hydrogen-shopify-scripts set:html={serializeForScript(scripts.init)} />
+  )
+}
+
+<script>
+  import { initializeShopifyScripts } from '@shopify/hydrogen';
+
+  // Module scripts run once per page load, so `<ClientRouter />` navigations don't initialize twice;
+  // Hydrogen tracks those page views itself.
+  const options = document.querySelector('script[data-astro-hydrogen-shopify-scripts]')?.textContent;
+  if (options) void initializeShopifyScripts(JSON.parse(options));
+</script>

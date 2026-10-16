@@ -15,15 +15,16 @@ import {
   type ShopifyRouteHandlerGroup,
 } from '@shopify/hydrogen';
 import type { MiddlewareHandler } from 'astro';
-import config from 'virtual:astro-hydrogen/config';
 import type { HydrogenLocals, HydrogenRequestArgs, OxygenEnv } from '../config.js';
+import { getOxygenBuyer } from '../runtime/buyer.js';
 import { getMemoryCache } from '../runtime/memory-cache.js';
 import { createRequestSessionManager } from '../runtime/session.js';
 import { createDefaultStorefrontClient } from '../runtime/storefront.js';
+import { config, routeTemplates as customRouteTemplates } from '../runtime/user-config.js';
 
 const DEFAULT_I18N: I18nConfig = { country: 'US', language: 'EN' };
 
-const routeTemplates = config.routeTemplates ?? createShopifyRouteTemplates({});
+const routeTemplates = customRouteTemplates ?? createShopifyRouteTemplates({});
 let defaultHandlers: readonly ShopifyRouteHandlerGroup[] | undefined;
 
 export const onRequest: MiddlewareHandler = async (context, next) => {
@@ -62,6 +63,8 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
   locals.shopifyRequestContext = requestContext;
 
   if (isPrerendered) return next();
+
+  locals.buyer = getOxygenBuyer(context.request.headers, buyerIp);
 
   const sessionManager = config.sessionManager
     ? await config.sessionManager(args)

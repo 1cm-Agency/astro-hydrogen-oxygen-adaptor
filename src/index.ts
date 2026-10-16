@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { readdir, rename, rm, rmdir, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,7 +7,7 @@ import { parseEnv } from 'node:util';
 import { oxygen, type OxygenPlugin } from '@shopify/mini-oxygen/vite';
 import type { AstroConfig, AstroIntegration } from 'astro';
 import { passthroughImageService } from 'astro/config';
-import { build as rolldownBuild } from 'rolldown';
+import { build as rolldownBuild, type Plugin as RolldownPlugin } from 'rolldown';
 import type { Plugin, PluginOption } from 'vite';
 
 export type {
@@ -110,7 +111,7 @@ export default function hydrogen(options: HydrogenAdapterOptions = {}): AstroInt
 
         const plugins: PluginOption[] = [
           virtualModulesPlugin({ configFile, cacheName: options.cacheName ?? 'hydrogen', assetBaseUrl }),
-          oxygenWorkerPlugin(),
+          oxygenWorkerPlugin(root),
         ];
         if (command === 'dev') plugins.push(miniOxygenDevPlugins(miniOxygen, compatibilityDate));
 
@@ -123,8 +124,16 @@ export default function hydrogen(options: HydrogenAdapterOptions = {}): AstroInt
             serverEntry: 'index.js',
             ...(assetBaseUrl && !config.build.assetsPrefix && { assetsPrefix: assetBaseUrl.replace(/\/+$/, '') }),
           },
-          // Sharp can't run in a Worker. Shopify's CDN resizes product images by URL instead.
-          ...(usesDefaultImageService && { image: { service: passthroughImageService() } }),
+          image: {
+            // Sharp can't run in a Worker. Shopify's CDN resizes product images by URL instead.
+            ...(usesDefaultImageService && { service: passthroughImageService() }),
+            // Astro's dev image endpoint reads files with `node:fs`; the generic one, used in
+            // production, fetches them, which also works in workerd.
+            ...(command === 'dev' &&
+              !config.image.endpoint.entrypoint && {
+                endpoint: { ...config.image.endpoint, entrypoint: 'astro/assets/endpoint/generic' },
+              }),
+          },
           vite: { plugins },
         });
 
@@ -242,13 +251,46 @@ function virtualModulesPlugin(values: {
   };
 }
 
+/**
+ * CommonJS packages the server loads in dev. workerd runs only ES modules, and MiniOxygen does not
+ * pre-bundle server dependencies by itself, so list them here; uninstalled ones are skipped.
+ * `a > b` is Vite's syntax for `b` as resolved from `a`.
+ */
+const COMMONJS_SERVER_DEPS = [
+  'astro > picomatch',
+  'react',
+  'react/jsx-runtime',
+  'react/jsx-dev-runtime',
+  'react-dom',
+  'react-dom/server',
+];
+
+function installedDeps(root: string, specifiers: string[]): string[] {
+  return specifiers.filter((specifier) => {
+    let from = join(root, 'package.json');
+    try {
+      for (const id of specifier.split(' > ')) {
+        from = createRequire(from).resolve(id.includes('/') ? id : `${id}/package.json`);
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
 /** Resolves the `ssr` environment for Workers and bundles every dependency into it. */
-function oxygenWorkerPlugin(): Plugin {
+function oxygenWorkerPlugin(root: string): Plugin {
   return {
     name: `${NAME}:worker`,
-    configEnvironment(name) {
+    configEnvironment(name, _options, { mode, command }) {
       if (name !== 'ssr') return;
-      return { resolve: { conditions: WORKER_CONDITIONS, noExternal: true } };
+      return {
+        resolve: { conditions: WORKER_CONDITIONS, noExternal: true },
+        // Workers have no `process`; CommonJS packages such as React branch on this at load time.
+        define: { 'process.env.NODE_ENV': JSON.stringify(mode === 'production' ? 'production' : 'development') },
+        ...(command === 'serve' && { optimizeDeps: { include: installedDeps(root, COMMONJS_SERVER_DEPS) } }),
+      };
     },
   };
 }
@@ -261,13 +303,22 @@ async function bundleWorker(workerDir: URL) {
   const entry = fileURLToPath(new URL('index.js', workerDir));
   const bundled = fileURLToPath(new URL('index.bundled.js', workerDir));
 
+  const staticNodeImports = new Set<string>();
   const output = await rolldownBuild({
     input: entry,
     platform: 'neutral',
-    external: [/^node:/, /^cloudflare:/],
+    external: [/^cloudflare:/],
     logLevel: 'warn',
+    plugins: [nodeBuiltinsPlugin(staticNodeImports)],
     output: { file: bundled, format: 'esm', codeSplitting: false },
   });
+  if (staticNodeImports.size > 0) {
+    await rm(bundled, { force: true });
+    throw new Error(
+      `Oxygen has no Node.js built-in modules, but the Worker imports:\n  ${[...staticNodeImports].join('\n  ')}\n` +
+        'Use a Web-compatible alternative for these dependencies.',
+    );
+  }
 
   const workerDirPath = fileURLToPath(workerDir);
   const inlinedFiles = output.output
@@ -276,6 +327,33 @@ async function bundleWorker(workerDir: URL) {
   await Promise.all(inlinedFiles.map((file) => rm(file, { force: true })));
   await rename(bundled, entry);
   await removeEmptyDirs(workerDirPath);
+}
+
+// `import("node:x")`, including with `/* @vite-ignore */`-style comments, which Rolldown leaves alone.
+const DYNAMIC_NODE_IMPORT = /\bimport\(\s*(?:\/\*[\s\S]*?\*\/\s*)*(["'])(node:[^"']+)\1\s*\)/g;
+
+/**
+ * Oxygen runs with no compatibility flags, so `node:*` modules do not exist there, and workerd
+ * refuses to start a Worker that references a module it cannot resolve, even one that is only
+ * imported dynamically. Dependencies often keep a Node fallback behind `await import('node:…')`
+ * (`@astrojs/react` does, for `node:stream`), so turn those into rejected promises, and collect
+ * static imports, which would always fail, to report them.
+ */
+function nodeBuiltinsPlugin(staticNodeImports: Set<string>): RolldownPlugin {
+  return {
+    name: 'astro-hydrogen:node-builtins',
+    resolveId(id, importer, { kind }) {
+      if (!id.startsWith('node:')) return;
+      if (kind !== 'dynamic-import') staticNodeImports.add(importer ? `${id} (from ${importer})` : id);
+      return { id, external: true };
+    },
+    renderChunk(code) {
+      if (!code.includes('node:')) return;
+      return code.replace(DYNAMIC_NODE_IMPORT, (_, _quote, id: string) =>
+        `Promise.reject(new Error(${JSON.stringify(`${id} is not available on Oxygen.`)}))`,
+      );
+    },
+  };
 }
 
 async function removeEmptyDirs(dir: string) {
