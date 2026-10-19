@@ -104,7 +104,7 @@ import ShopifyScripts from 'astro-hydrogen/components/ShopifyScripts.astro';
 </head>
 ```
 
-It loads Shopify's analytics, the Customer Privacy API (with Shopify's banner when you choose `default-banner`) and Perf Kit, then starts them in the browser. Page view events are sent on load and after `<ClientRouter />` navigations. The consent request goes through the adapter's Storefront API proxy, which sets Shopify's `_shopify_essential`, `_shopify_analytics` and `_shopify_marketing` cookies.
+It loads Shopify's analytics, the Customer Privacy API (with Shopify's banner when you choose `default-banner`) and Perf Kit, then starts them in the browser. Hydrogen emits a page view event on load and after each `<ClientRouter />` navigation; Astro doesn't re-run Shopify's head scripts when it swaps pages. The consent request goes through the adapter's Storefront API proxy, which sets Shopify's `_shopify_essential`, `_shopify_analytics` and `_shopify_marketing` cookies.
 
 The shop comes from `SHOP_ID`, `PUBLIC_STOREFRONT_ID` and `PUBLIC_STORE_DOMAIN` (all set by `shopify hydrogen env pull`), and the market from your `i18n` config. Props:
 
