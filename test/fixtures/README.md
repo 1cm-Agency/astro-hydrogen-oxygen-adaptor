@@ -19,6 +19,8 @@ exits).
 | `features` | Actions, `astro:env`, `Astro.session`, a Preact island, i18n routing |
 | `node-import` | a static `node:` import must fail the build |
 | `shopify-scripts` | `<ShopifyScripts />` |
+| `elements` | `<Money />`, `<ShopifyImage />`, `<ShopPayButton />` and `<PredictiveSearchForm />`, with an `/en-ca` market, a prerendered page and the Shop Pay link through the Hydrogen routes |
+| `cart-elements` | `<ProductForm />`, `<CartForm />`, a cart page and bare forms against mock.shop (`slides`); the no-JavaScript add, set and remove flow |
 | `prerendered-404` | a prerendered `404.astro` next to Hydrogen routes: the Worker entry still serves `/api/cart` and `/admin`, in the build and under `astro dev` |
 | `integrations-only` | the config `astro add` writes (`integrations: [hydrogen()]`, no `adapter`) |
 

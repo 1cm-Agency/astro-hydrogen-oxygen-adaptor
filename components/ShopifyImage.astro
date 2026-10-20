@@ -1,0 +1,40 @@
+---
+/**
+ * An `<img>` for a Shopify CDN image (`cdn.shopify.com`, `mock.shop`): `src` is sized to `width`, and
+ * `widths` adds a `srcset`. Images on other hosts render untouched, without a `srcset`.
+ * Other attributes are passed through.
+ */
+import type { HTMLAttributes } from 'astro/types';
+import { shopifyImageSrcSet, shopifyImageUrl, type ShopifyImageCrop } from 'astro-hydrogen/runtime/image';
+
+interface Props extends Omit<HTMLAttributes<'img'>, 'src' | 'srcset' | 'alt' | 'width' | 'height' | 'crop'> {
+  /** The image URL, for example `product.featuredImage.url`. */
+  src: string;
+  /** Alternative text. Pass `""` for a decorative image. */
+  alt: string;
+  /** Display width in pixels. Sizes `src` and sets the `width` attribute. */
+  width: number;
+  /** Display height in pixels. Sets the `height` attribute and, with `crop`, crops the image. */
+  height?: number;
+  /** Candidate widths for `srcset`, for example `[400, 800, 1200]`. Pair with `sizes`. */
+  widths?: readonly number[];
+  /** Which part to keep when `width` and `height` change the aspect ratio. */
+  crop?: ShopifyImageCrop;
+}
+
+const { src, alt, width, height, widths, crop, sizes, loading = 'lazy', decoding = 'async', ...attrs } = Astro.props;
+
+const srcset = widths?.length ? shopifyImageSrcSet(src, { widths, height, crop }) : '';
+---
+
+<img
+  {...attrs}
+  src={shopifyImageUrl(src, { width, height, crop })}
+  srcset={srcset || undefined}
+  sizes={srcset ? sizes : undefined}
+  alt={alt}
+  width={width}
+  height={height}
+  loading={loading}
+  decoding={decoding}
+/>

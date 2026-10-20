@@ -1,0 +1,10 @@
+---
+import Money from 'astro-hydrogen/components/Money.astro';
+export const prerender = true;
+---
+
+<html lang="en">
+  <body>
+    <Money id="price" money={{ amount: '19.5', currencyCode: 'USD' }} />
+  </body>
+</html>

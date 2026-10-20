@@ -1,0 +1,14 @@
+---
+import PredictiveSearchForm from 'astro-hydrogen/components/PredictiveSearchForm.astro';
+---
+
+<html lang="en">
+  <body>
+    <div id="default">
+      <PredictiveSearchForm><button type="submit">Go</button></PredictiveSearchForm>
+    </div>
+    <div id="custom">
+      <PredictiveSearchForm action="/en-ca/search" placeholder="Find it" label="Find products" value="socks" class="f" inputAttrs={{ id: 'q' }} />
+    </div>
+  </body>
+</html>

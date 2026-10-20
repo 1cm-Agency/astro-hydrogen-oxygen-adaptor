@@ -1,0 +1,14 @@
+---
+import CartForm from 'astro-hydrogen/components/CartForm.astro';
+
+const id = Astro.url.searchParams.get('id') ?? 'gid://shopify/ProductVariant/1';
+const enhance = Astro.url.searchParams.get('enhance') !== '0';
+---
+
+<html>
+  <body>
+    <CartForm action="add" merchandiseId={id} quantity={2} enhance={enhance} label="Buy now" id="bare" />
+    <CartForm action="note-update" note="hello" enhance={enhance} id="note"><button>Save</button></CartForm>
+    <CartForm action="discount-apply" discountCode="SAVE" enhance={enhance} id="discount" />
+  </body>
+</html>

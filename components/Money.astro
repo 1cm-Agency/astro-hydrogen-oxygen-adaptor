@@ -1,0 +1,37 @@
+---
+/**
+ * A price formatted for the request's market, as text in an element (a `<span>` by default).
+ * Pass `money`, or `range` for a "from – to" price. The locale comes from the market in your
+ * `i18n` config (`en-CA` under `/en-ca`), and falls back to `en-US` without it.
+ *
+ * Renders `data-currency` and `data-amount` (`data-amount-min` and `data-amount-max` for a range)
+ * so client code can read the raw values. Other attributes are passed through.
+ */
+import type { MoneyV2 } from '@shopify/hydrogen';
+import type { HTMLAttributes } from 'astro/types';
+import { formatPrice, resolveLocale } from 'astro-hydrogen/runtime/money';
+
+type Base = Omit<HTMLAttributes<'span'>, 'as'> & {
+  /** BCP 47 locale. Defaults to the request's market. */
+  locale?: string;
+  /** Drop the fraction digits of a whole amount: `$19` instead of `$19.00`. */
+  withoutTrailingZeros?: boolean;
+  /** Leave out the currency symbol or code. */
+  withoutCurrency?: boolean;
+  /** The element to render. Defaults to `span`. */
+  as?: string;
+};
+type Props = Base & ({ money: MoneyV2; range?: never } | { range: readonly [MoneyV2, MoneyV2]; money?: never });
+
+const { money, range, locale, withoutTrailingZeros, withoutCurrency, as: Tag = 'span', ...attrs } = Astro.props;
+
+const resolvedLocale = locale ?? resolveLocale(Astro.locals.shopifyRequestContext?.i18n);
+const text = formatPrice((money ?? range)!, { locale: resolvedLocale, withoutTrailingZeros, withoutCurrency });
+const data = money
+  ? { 'data-currency': money.currencyCode, 'data-amount': money.amount }
+  : range
+    ? { 'data-currency': range[0].currencyCode, 'data-amount-min': range[0].amount, 'data-amount-max': range[1].amount }
+    : {};
+---
+
+<Tag {...attrs} {...data}>{text}</Tag>

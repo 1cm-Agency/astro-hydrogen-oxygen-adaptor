@@ -1,0 +1,28 @@
+---
+import { getCart, getCartId } from '@shopify/hydrogen';
+import CartForm from 'astro-hydrogen/components/CartForm.astro';
+
+const { cart } = await getCart(getCartId(Astro.request), Astro.locals.storefront);
+const lines = cart?.lines.nodes ?? [];
+---
+
+<html>
+  <body>
+    <h1>Cart</h1>
+    {
+      lines.length === 0 ? (
+        <p id="empty">Your cart is empty.</p>
+      ) : (
+        <ul>
+          {lines.map((line) => (
+            <li data-line={line.id}>
+              {line.merchandise.product.title} ({line.merchandise.title})
+              <CartForm action="set" lineId={line.id} quantity={line.quantity} data-set-form />
+              <CartForm action="remove" lineId={line.id} data-remove-form />
+            </li>
+          ))}
+        </ul>
+      )
+    }
+  </body>
+</html>

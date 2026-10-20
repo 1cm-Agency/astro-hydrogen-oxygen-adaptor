@@ -1,0 +1,47 @@
+---
+import { gql } from '@shopify/hydrogen';
+import Money from 'astro-hydrogen/components/Money.astro';
+import ShopifyImage from 'astro-hydrogen/components/ShopifyImage.astro';
+import ShopPayButton from 'astro-hydrogen/components/ShopPayButton.astro';
+
+const { data } = await Astro.locals.storefront.graphql(
+  gql(`
+    query ElementsProduct {
+      products(first: 1) {
+        nodes {
+          title
+          featuredImage { url altText }
+          priceRange {
+            minVariantPrice { amount currencyCode }
+            maxVariantPrice { amount currencyCode }
+          }
+          variants(first: 1) { nodes { id } }
+        }
+      }
+    }
+  `),
+);
+const product = data!.products.nodes[0]!;
+const { minVariantPrice, maxVariantPrice } = product.priceRange;
+const variantId = product.variants.nodes[0]!.id;
+---
+
+<html lang="en">
+  <body>
+    <h1 id="title">{product.title}</h1>
+    <Money id="price" money={minVariantPrice} />
+    <Money id="range" range={[minVariantPrice, maxVariantPrice]} />
+    <Money id="fixed" money={{ amount: '1299.00', currencyCode: 'USD' }} />
+    <Money id="whole" money={{ amount: '1299.00', currencyCode: 'USD' }} withoutTrailingZeros />
+    <Money id="bare" money={{ amount: '1299.00', currencyCode: 'USD' }} withoutCurrency as="strong" class="price" />
+    <Money id="fr" money={{ amount: '1299.00', currencyCode: 'EUR' }} locale="fr-FR" />
+    <div id="images">
+      <ShopifyImage id="cdn" src={product.featuredImage!.url} alt="Product" width={400} height={300} crop="center" widths={[200, 400]} sizes="50vw" />
+      <ShopifyImage id="plain" src={product.featuredImage!.url} alt="" width={120} />
+      <ShopifyImage id="external" src="https://example.com/a.jpg?x=1" alt="External" width={400} widths={[200, 400]} sizes="50vw" loading="eager" />
+    </div>
+    <div id="shop-pay"><ShopPayButton variants={[{ id: variantId, quantity: 2 }]} width="100%" /></div>
+    <div id="cart-pay"><ShopPayButton /></div>
+    <div id="off"><ShopPayButton disabled variants={[variantId]} /></div>
+  </body>
+</html>

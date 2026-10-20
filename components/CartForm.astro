@@ -1,0 +1,142 @@
+---
+/**
+ * A cart form that posts to Hydrogen's `/api/cart` route. It is a plain HTML form, so it works
+ * without JavaScript (the route sets the `cart` cookie and redirects back with a 303) and on stores
+ * without Shopify's scripts, such as mock.shop. Hydrogen's cart route takes one line per post.
+ *
+ *   <CartForm action="add" merchandiseId={variant.id} quantity={2} label="Buy now" />
+ *   <CartForm action="set" lineId={line.id} quantity={line.quantity}>
+ *     <button {...register('remove')}>Remove</button>
+ *   </CartForm>
+ *
+ * With `enhance` (the default) the form gets `data-cart-form` and the page loads
+ * `astro-hydrogen/client/cart`, which sends the form through Shopify's Standard Actions when they
+ * are on the page (so no page load) and keeps `onCart` subscribers up to date.
+ *
+ * Fields by action:
+ * - `add`: `merchandiseId` (required), `quantity` (1), `sellingPlanId`, `attributes`
+ * - `set`: `lineId`, `quantity`, as an editable quantity input that submits on change
+ * - `increase`, `decrease`: `lineId`, `quantity` (the current quantity)
+ * - `remove`: `lineId`
+ * - `discount-apply`, `discount-remove`: `discountCode`
+ * - `note-update`: `note`
+ * - `attributes-update`: `attributes`
+ *
+ * The slot replaces the default submit button. For `set` there is no default button (Enter submits).
+ */
+import { createCartFormRegister } from '@shopify/hydrogen';
+import type { HTMLAttributes } from 'astro/types';
+
+type CartAction =
+  | 'add'
+  | 'set'
+  | 'increase'
+  | 'decrease'
+  | 'remove'
+  | 'discount-apply'
+  | 'discount-remove'
+  | 'note-update'
+  | 'attributes-update';
+
+interface Props extends Omit<HTMLAttributes<'form'>, 'action' | 'method'> {
+  action: CartAction;
+  /** Where to post. Defaults to Hydrogen's cart route, `/api/cart`. */
+  endpoint?: string;
+  /** `add`: the variant to add. */
+  merchandiseId?: string;
+  /** `set`, `increase`, `decrease`, `remove`: the cart line. */
+  lineId?: string;
+  /** `add`: how many to add (default 1). `set`, `increase`, `decrease`: the current quantity. */
+  quantity?: number;
+  /** `add`: a selling plan for the line. */
+  sellingPlanId?: string;
+  /** `add`, `attributes-update`: key/value attributes, sent as `attributes.<key>`. */
+  attributes?: Record<string, string>;
+  /** `discount-apply`, `discount-remove`: the code. */
+  discountCode?: string;
+  /** `note-update`: the note. */
+  note?: string;
+  /** Text of the default submit button. */
+  label?: string;
+  /** Add `data-cart-form` and load the cart client (default true). */
+  enhance?: boolean;
+}
+
+const {
+  action,
+  endpoint = '/api/cart',
+  merchandiseId,
+  lineId,
+  quantity,
+  sellingPlanId,
+  attributes,
+  discountCode,
+  note,
+  label,
+  enhance = true,
+  ...rest
+} = Astro.props;
+
+const register = createCartFormRegister();
+const needsLine = ['set', 'increase', 'decrease', 'remove'].includes(action);
+if (action === 'add' && merchandiseId === undefined) throw new Error('<CartForm action="add"> needs a merchandiseId.');
+if (needsLine && !lineId) throw new Error(`<CartForm action="${action}"> needs a lineId.`);
+
+const defaultLabels: Record<CartAction, string> = {
+  add: 'Add to cart',
+  set: 'Update',
+  increase: 'Increase quantity',
+  decrease: 'Decrease quantity',
+  remove: 'Remove',
+  'discount-apply': 'Apply',
+  'discount-remove': 'Remove discount',
+  'note-update': 'Save note',
+  'attributes-update': 'Save',
+};
+const hasSlot = Astro.slots.has('default');
+---
+
+<form method="post" action={endpoint} data-cart-form={enhance ? '' : undefined} data-cart-action={action} {...rest}>
+  {action === 'set' && <button {...register('set')} />}
+  {needsLine && <input {...register('lineId', { value: lineId! })} type="hidden" />}
+  {action === 'add' && <input {...register('merchandiseId', { value: merchandiseId! })} type="hidden" />}
+  {sellingPlanId && action === 'add' && <input {...register('sellingPlanId', { value: sellingPlanId })} type="hidden" />}
+  {
+    action === 'set' && (
+      <input {...register('quantity', { value: quantity ?? 1, interactive: true })} aria-label="Quantity" />
+    )
+  }
+  {
+    (action === 'add' || action === 'increase' || action === 'decrease') && quantity !== undefined && (
+      <input {...register('quantity', { value: quantity })} type="hidden" />
+    )
+  }
+  {
+    (action === 'discount-apply' || action === 'discount-remove') && discountCode !== undefined && (
+      <input {...register('discountCode', { value: discountCode })} type="hidden" />
+    )
+  }
+  {action === 'note-update' && note !== undefined && <input {...register('note', { value: note })} type="hidden" />}
+  {
+    (action === 'add' || action === 'attributes-update') &&
+      Object.entries(attributes ?? {}).map(([key, value]) => (
+        <input {...register('attributeValue', { key, value })} type="hidden" />
+      ))
+  }
+  {
+    hasSlot ? (
+      <slot />
+    ) : action !== 'set' ? (
+      <button {...register(action)}>{label ?? defaultLabels[action]}</button>
+    ) : null
+  }
+</form>
+{
+  enhance && (
+    <script>
+      import { connectCart } from 'astro-hydrogen/client/cart';
+
+      connectCart();
+    </script>
+  )
+}

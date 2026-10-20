@@ -1,0 +1,16 @@
+---
+/**
+ * A Shop Pay button, rendered on the server as a `<hydrogen-shop-pay-button>` with a declarative
+ * shadow root. It needs no script and works before JavaScript loads.
+ *
+ * Without `checkoutUrl` it links to your own `/checkout` (the current cart) or `/cart/{variant}:{qty}`
+ * (the given `variants`). The adapter's Hydrogen routes redirect both to the store's checkout.
+ */
+import { renderShopPayButton, type ShopPayButtonOptions } from '@shopify/hydrogen';
+
+type Props = ShopPayButtonOptions;
+
+const html = renderShopPayButton(Astro.props);
+---
+
+<Fragment set:html={html} />

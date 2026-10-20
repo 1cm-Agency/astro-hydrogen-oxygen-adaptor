@@ -1,0 +1,171 @@
+---
+/**
+ * A variant picker and add-to-cart form for a product, rendered on the server.
+ *
+ * Each option value is a link to the same page with the selection in the query string
+ * (`?Color=Red&Size=M`), so choosing a variant works without JavaScript; combinations that do not
+ * exist are disabled buttons, sold-out ones stay links. The add form is a `<CartForm action="add">`
+ * for the selected variant, with a quantity input, disabled when it cannot be bought.
+ *
+ * Query the product with the fragment from `astro-hydrogen/runtime/product`:
+ *
+ *   const { data } = await Astro.locals.storefront.graphql(
+ *     `query Product($handle: String!, $selectedOptions: [SelectedOptionInput!]!) {
+ *        product(handle: $handle) { ...ProductFormFields }
+ *      } ${PRODUCT_FORM_FRAGMENT}`,
+ *     { variables: { handle, selectedOptions: getSelectedProductOptions({ searchParams: Astro.url.searchParams }) } },
+ *   );
+ *   <ProductForm product={data.product} />
+ *
+ * With `enhance` (the default) the page also loads a script that upgrades the links to in-place
+ * selection through Hydrogen's product form store (no fetch), keeps the URL in sync with
+ * `history.replaceState`, and sends the add form through the cart store.
+ *
+ * Hooks: `[data-product-form]`, `[data-option]` (fieldset), `[data-option-value]` with
+ * `data-selected` / `data-sold-out`, `[data-product-price]`, `[data-product-compare-at-price]`,
+ * `[data-product-quantity]`, `[data-product-submit]`. Slots: `price` (replaces the price text) and
+ * the default slot (extra content inside the add form, before the submit button).
+ */
+import type { ProductInput } from '@shopify/hydrogen';
+import { getProductFormState } from 'astro-hydrogen/runtime/product';
+import { serializeForScript } from 'astro-hydrogen/runtime/shopify-scripts';
+import type { HTMLAttributes } from 'astro/types';
+import CartForm from './CartForm.astro';
+
+interface Props extends HTMLAttributes<'div'> {
+  product: ProductInput;
+  /** The page's query string, which holds the selection. Defaults to the request's. */
+  searchParams?: URLSearchParams;
+  /** Upgrade the links to in-place selection and send the form through the cart store (default true). */
+  enhance?: boolean;
+  /** BCP 47 locale for prices (default `en-US`). */
+  locale?: string;
+}
+
+const { product, searchParams = Astro.url.searchParams, enhance = true, locale = 'en-US', ...rest } = Astro.props;
+const state = getProductFormState(product, searchParams);
+const { variant } = state;
+const price = variant?.price ?? product.priceRange?.minVariantPrice;
+const compareAt = variant?.compareAtPrice;
+const onSale = Boolean(compareAt && price && Number(compareAt.amount) > Number(price.amount));
+const format = (money: { amount: string; currencyCode: string }) => {
+  try {
+    return new Intl.NumberFormat(locale, { style: 'currency', currency: money.currencyCode }).format(Number(money.amount));
+  } catch {
+    return `${money.amount} ${money.currencyCode}`;
+  }
+};
+const hrefFor = (value: (typeof state.options)[number]['values'][number]) =>
+  value.handle === product.handle ? `${Astro.url.pathname}${value.search}` : `/products/${value.handle}${value.search}`;
+const label = state.canAddToCart ? 'Add to cart' : variant ? 'Sold out' : 'Select options';
+---
+
+<div
+  data-product-form
+  data-product-handle={product.handle}
+  data-variant-id={variant?.id ?? ''}
+  data-locale={locale}
+  data-enhance={enhance ? '' : undefined}
+  {...rest}
+>
+  {
+    state.hasChoices &&
+      state.options.map((option) => (
+        <fieldset data-option={option.name}>
+          <legend>
+            {option.name}
+            {option.selected !== null && (
+              <>
+                : <span data-option-selected={option.name}>{option.selected}</span>
+              </>
+            )}
+          </legend>
+          {option.values.map((value) =>
+            value.exists ? (
+              <a
+                href={hrefFor(value)}
+                data-option-value={value.name}
+                data-selected={value.selected ? '' : undefined}
+                data-sold-out={value.available ? undefined : ''}
+                data-other-product={value.handle === product.handle ? undefined : ''}
+                aria-current={value.selected ? 'true' : undefined}
+              >
+                {value.name}
+                {!value.available && <span class="sr-only"> (sold out)</span>}
+              </a>
+            ) : (
+              <button
+                type="button"
+                disabled
+                data-option-value={value.name}
+                data-unavailable=""
+                aria-pressed={value.selected ? 'true' : 'false'}
+              >
+                {value.name}
+              </button>
+            ),
+          )}
+        </fieldset>
+      ))
+  }
+
+  <p data-product-price-block>
+    <slot name="price">
+      {price && <span data-product-price>{format(price)}</span>}
+      <s data-product-compare-at-price hidden={!onSale}>{onSale && compareAt ? format(compareAt) : ''}</s>
+    </slot>
+  </p>
+
+  <CartForm action="add" merchandiseId={variant?.id ?? ''} enhance={enhance} data-product-add-form>
+    <label>
+      <span>Quantity</span>
+      <input data-product-quantity type="number" name="quantity" value="1" min="1" />
+    </label>
+    <slot />
+    <button
+      type="submit"
+      name="intent"
+      value="add"
+      data-product-submit
+      data-label-add="Add to cart"
+      data-label-sold-out="Sold out"
+      data-label-select="Select options"
+      disabled={!state.canAddToCart}
+    >
+      {label}
+    </button>
+  </CartForm>
+
+  {enhance && <script type="application/json" data-product-form-data set:html={serializeForScript(product)} />}
+</div>
+{
+  enhance && (
+    <script>
+      import { enhanceProductForm } from 'astro-hydrogen/client/product-form';
+
+      const enhanced = new Map<Element, () => void>();
+
+      function init() {
+        for (const [root, cleanup] of enhanced) {
+          if (!root.isConnected) {
+            cleanup();
+            enhanced.delete(root);
+          }
+        }
+        for (const root of document.querySelectorAll<HTMLElement>('[data-product-form][data-enhance]')) {
+          if (enhanced.has(root)) continue;
+          const json = root.querySelector('script[data-product-form-data]')?.textContent;
+          if (!json) continue;
+          try {
+            enhanced.set(root, enhanceProductForm(root, JSON.parse(json), location.pathname));
+          } catch (error) {
+            console.error('Product form enhancement failed', error);
+          }
+        }
+      }
+
+      init();
+      document.addEventListener('astro:page-load', init);
+    </script>
+  )
+}

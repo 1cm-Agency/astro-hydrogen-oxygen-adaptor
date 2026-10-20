@@ -1,0 +1,29 @@
+---
+import { getSelectedProductOptions } from '@shopify/hydrogen';
+import ProductForm from 'astro-hydrogen/components/ProductForm.astro';
+import { PRODUCT_FORM_FRAGMENT } from 'astro-hydrogen/runtime/product';
+
+const QUERY = `query Product($handle: String!, $selectedOptions: [SelectedOptionInput!]!) {
+  product(handle: $handle) { ...ProductFormFields }
+}
+${PRODUCT_FORM_FRAGMENT}`;
+
+const { data } = await Astro.locals.storefront.graphql(QUERY, {
+  variables: {
+    handle: Astro.params.handle!,
+    selectedOptions: getSelectedProductOptions({ searchParams: Astro.url.searchParams }),
+  },
+});
+const product = data?.product;
+if (!product) return new Response('not found', { status: 404 });
+const enhance = !Astro.url.searchParams.has('plain');
+---
+
+<html>
+  <body>
+    <h1>{product.title}</h1>
+    <p id="selected-variant">{product.selectedOrFirstAvailableVariant?.id}</p>
+    <p id="selected-title">{product.selectedOrFirstAvailableVariant?.title}</p>
+    <ProductForm product={product} enhance={enhance} />
+  </body>
+</html>

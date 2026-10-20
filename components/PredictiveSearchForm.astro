@@ -1,0 +1,53 @@
+---
+/**
+ * A search form that works without JavaScript: a `role="search"` GET form that submits the term as
+ * `q` to the search page. Put a submit button in the slot. Predictive results are a separate,
+ * client-side layer that you add on top.
+ */
+import {
+  createPredictiveSearchFormRegister,
+  getPredictiveSearchFormAttributes,
+  readPredictiveSearchFormTerm,
+} from '@shopify/hydrogen';
+import type { HTMLAttributes } from 'astro/types';
+
+interface Props extends Omit<HTMLAttributes<'form'>, 'action' | 'method' | 'role'> {
+  /** The search page path. Defaults to Hydrogen's `/search`. */
+  action?: string;
+  /** Placeholder text for the input. */
+  placeholder?: string;
+  /** Accessible label for the input, rendered as `aria-label`. Defaults to `Search`. */
+  label?: string;
+  /** The input's initial value. Defaults to the `q` parameter of the current URL. */
+  value?: string;
+  /** Attributes for the `<input>` (for example `class` or `id`). */
+  inputAttrs?: HTMLAttributes<'input'>;
+}
+
+const { action, placeholder, label = 'Search', value, inputAttrs = {}, ...formAttrs } = Astro.props;
+
+const form = getPredictiveSearchFormAttributes(action);
+// Hydrogen's input attributes are React-cased (`autoComplete`, `spellCheck: false`): write the HTML names.
+const { name, type } = createPredictiveSearchFormRegister()('query');
+
+// Prefill from `?q=` on the search page.
+const params = new FormData();
+const q = Astro.url.searchParams.get(name);
+if (q !== null) params.set(name, q);
+const term = value ?? readPredictiveSearchFormTerm(params);
+---
+
+<form {...formAttrs} {...form}>
+  <input
+    {...inputAttrs}
+    name={name}
+    type={type}
+    value={term || undefined}
+    placeholder={placeholder}
+    aria-label={label}
+    autocomplete="off"
+    autocapitalize="off"
+    spellcheck="false"
+  />
+  <slot />
+</form>

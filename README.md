@@ -469,6 +469,138 @@ The shop comes from `SHOP_ID`, `PUBLIC_STOREFRONT_ID` (falling back to `'0'`) an
 
 Without a shop ID or store domain (as with mock.shop) it renders nothing and logs one warning. Send product, collection and cart events from your own scripts through `window.Shopify.analytics`.
 
+## Components
+
+Server components that ship as `.astro` source and import the helpers below. They need no client JavaScript. Import them from `astro-hydrogen/components/*.astro`.
+
+### `<Money />`
+
+A price formatted for the request's market (`en-CA` under `/en-ca`). The locale comes from `Astro.locals.shopifyRequestContext.i18n`, and falls back to `en-US` when the middleware is disabled. It also works in prerendered pages.
+
+```astro
+---
+import Money from 'astro-hydrogen/components/Money.astro';
+---
+<Money money={product.priceRange.minVariantPrice} />
+<Money range={[min, max]} withoutTrailingZeros as="strong" class="price" />
+```
+
+| Prop | |
+| --- | --- |
+| `money` | A `MoneyV2` (`{ amount, currencyCode }`). |
+| `range` | `[min, max]`, both `MoneyV2` in one currency, instead of `money`. |
+| `locale` | BCP 47 locale. Default: the request's market. |
+| `withoutTrailingZeros` | `$19` instead of `$19.00`. |
+| `withoutCurrency` | Leave out the currency symbol. |
+| `as` | The element to render. Default `span`. |
+
+Other attributes are passed to the element. It renders `data-currency` and `data-amount` (`data-amount-min` and `data-amount-max` for a range). For custom layouts, call Hydrogen's `formatMoney()` with `resolveLocale()` from `astro-hydrogen/runtime/money` and use its `parts`.
+
+### `<ShopifyImage />`
+
+An `<img>` for a Shopify CDN image. It sets `width`, `height` and `crop` as URL parameters and, with `widths`, a `srcset`.
+
+```astro
+<ShopifyImage src={image.url} alt={image.altText ?? product.title} width={400} widths={[400, 800]} sizes="(min-width: 768px) 25vw, 50vw" />
+```
+
+| Prop | |
+| --- | --- |
+| `src` | The image URL. |
+| `alt` | Required. Use `""` for a decorative image. |
+| `width` | Display width in pixels. Sizes `src`. |
+| `height` | Display height in pixels. |
+| `widths` | Candidate widths for `srcset`. |
+| `sizes` | The `sizes` attribute. Only rendered with `widths`. |
+| `crop` | `top`, `center`, `bottom`, `left` or `right`. |
+| `loading`, `decoding` | Default `lazy` and `async`. Use `loading="eager"` for the image above the fold. |
+
+Only `cdn.shopify.com`, `mock.shop` and their subdomains are rewritten. Other URLs render as given, without a `srcset`. Other attributes are passed to the `<img>`.
+
+### `<ShopPayButton />`
+
+Hydrogen's Shop Pay button, rendered on the server as `<hydrogen-shop-pay-button>` with a declarative shadow root. It works before any JavaScript loads, and the page needs no script for it.
+
+```astro
+<ShopPayButton variants={[{ id: variant.id, quantity: 1 }]} width="100%" disabled={!variant.availableForSale} />
+```
+
+The props are Hydrogen's `ShopPayButtonOptions`: `variants` (variant IDs or `{ id, quantity }`; omit them to check out the current cart), `disabled`, `width`, `borderRadius`, `accessibilityLabel`, `channel`, `checkoutUrl` and `nonce`. Without `checkoutUrl` the button links to your own `/cart/{variant}:{qty}` or `/checkout`. The adapter's [Hydrogen routes](#routes-hydrogen-serves) redirect those to the store's checkout, so leave them enabled.
+
+### `<PredictiveSearchForm />`
+
+A `role="search"` GET form with an input named `q`, using Hydrogen's form attributes, so search works without JavaScript. It is server-only: it does not include Hydrogen's predictive search client store, and the results page is yours.
+
+```astro
+<PredictiveSearchForm placeholder="Search">
+  <button type="submit">Search</button>
+</PredictiveSearchForm>
+```
+
+| Prop | |
+| --- | --- |
+| `action` | The search page path. Default `/search`. |
+| `placeholder` | Placeholder for the input. |
+| `label` | The input's `aria-label`. Default `Search`. |
+| `value` | Initial value. Default: the `q` parameter of the current URL. |
+| `inputAttrs` | Attributes for the `<input>`, such as `id` or `class`. |
+
+The default slot is rendered after the input. Other attributes are passed to the `<form>`. The `/api/predictive-search` route that Hydrogen serves is what a client-side autocomplete would call.
+
+### `<CartForm />` and `<ProductForm />`
+
+`<CartForm />` posts to Hydrogen's `/api/cart` route. It is plain HTML, so it works without JavaScript and on stores without Shopify's scripts (such as mock.shop): the route sets the `cart` cookie and redirects back.
+
+```astro
+---
+import CartForm from 'astro-hydrogen/components/CartForm.astro';
+---
+<CartForm action="add" merchandiseId={variant.id} quantity={1} label="Add to cart" />
+<CartForm action="set" lineId={line.id} quantity={line.quantity}>
+  <button name="intent" value="remove">Remove</button>
+</CartForm>
+```
+
+| Prop | |
+| --- | --- |
+| `action` | `add`, `set`, `increase`, `decrease`, `remove`, `discount-apply`, `discount-remove`, `note-update` or `attributes-update`. |
+| `merchandiseId`, `quantity`, `sellingPlanId`, `attributes` | For `add`. Hydrogen's route takes one line per form post. |
+| `lineId`, `quantity` | For the line actions. `set` renders an editable quantity input. |
+| `discountCode`, `note` | For the discount and note actions. |
+| `endpoint` | The post URL. Defaults to `/api/cart`. |
+| `label` | The default submit button's text. The default slot replaces that button. |
+| `enhance` | Defaults to `true`: marks the form `data-cart-form` and loads `astro-hydrogen/client/cart`. When Shopify's Standard Actions are on the page (`<ShopifyScripts />` with a `SHOP_ID`) the cart updates without a page load; otherwise the form posts normally. `false` renders no script. |
+
+`<ProductForm />` renders a variant picker and an add-to-cart form. Query the product with the fragment it needs:
+
+```astro
+---
+import ProductForm from 'astro-hydrogen/components/ProductForm.astro';
+import { PRODUCT_FORM_FRAGMENT } from 'astro-hydrogen/runtime/product';
+
+const query = `query Product($handle: String!, $selectedOptions: [SelectedOptionInput!]!) {
+  product(handle: $handle) { ...ProductFormFields }
+} ${PRODUCT_FORM_FRAGMENT}`;
+---
+<ProductForm product={data.product} />
+```
+
+Option values are links (`?Color=Red&Size=M`), so selection works without JavaScript; with `enhance` (the default) they switch in place through Hydrogen's product form store and keep the URL in sync. Props: `product`, `searchParams` (defaults to the current URL's), `locale` for the price, `enhance`, and a `price` slot. Style it through the `data-*` hooks: `data-option`, `data-option-value`, `data-selected`, `data-sold-out`, `data-product-price`, `data-product-submit`. `getProductFormState(product, searchParams)` from `astro-hydrogen/runtime/product` gives the same resolved state for custom markup.
+
+For your own cart UI, use the browser module:
+
+```ts
+import { connectCart, onCart } from 'astro-hydrogen/client/cart';
+connectCart();
+const stop = onCart((cart) => render(cart));
+```
+
+`connectCart()` is idempotent and also wires every `data-cart-form` on the page. `CART_SUBMIT_EVENT` fires on `document` when the store takes over a form, which is the moment to open a cart drawer.
+
+### Helpers
+
+`astro-hydrogen/runtime/image` exports `shopifyImageUrl(url, { width, height, crop })`, `shopifyImageSrcSet(url, { widths, height, crop })` and `isShopifyImageHost(hostname)`. `astro-hydrogen/runtime/money` exports `resolveLocale(i18n)`, which turns `{ language: 'EN', country: 'CA' }` into `en-CA`, and `formatPrice(money | [min, max], { locale?, i18n?, ...formatMoneyOptions })`, which returns the localized string. Use them where a component does not fit, such as `og:image` URLs or client islands.
+
 ## Prerendering, assets and `base`
 
 `export const prerender = true` works as usual, as does `output: 'static'` with `prerender = false` on individual pages.
@@ -551,7 +683,7 @@ Deployments are immutable: each deploy uploads new code and assets under a new a
 | i18n domains | Declared `experimental`; untested. |
 | View Transitions (`<ClientRouter />`) | Used by the playground. `<ShopifyScripts />` sends page views after navigations. |
 | `Astro.session` | No driver by default; see [Sessions](#sessions). |
-| Images | Sharp for prerendered pages at build time (Astro 7.4+); passthrough at runtime, no resizing. |
+| Images | Sharp for prerendered pages at build time (Astro 7.4+); passthrough at runtime, no resizing. Shopify CDN images are sized by URL with `<ShopifyImage />`. |
 | Fonts | Untested. |
 | Content collections | Not exercised by this package's tests. Build-time collections do not depend on the adapter; live collections are untested. |
 
