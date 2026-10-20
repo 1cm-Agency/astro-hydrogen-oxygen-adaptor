@@ -1,0 +1,49 @@
+# Integration fixtures
+
+Small Astro projects that the tests in `test/integration/` build and run in the real Workers runtime
+(MiniOxygen/workerd). Run them with `npm run build && node --test 'test/integration/**/*.test.js'`
+from `packages/astro-hydrogen`.
+
+Each fixture has a `package.json` (`{ "private": true, "type": "module" }`), an `astro.config.mjs` that
+imports `astro-hydrogen`, `src/pages/`, and optionally `src/hydrogen.config.ts`. There is no per-fixture
+install: `astro`, `@shopify/hydrogen` and the `astro-hydrogen` workspace link resolve from the monorepo's
+root `node_modules`. Build output goes to `dist/<mode>-<pid>/` (gitignored, removed when the test process
+exits).
+
+| Fixture | Covers |
+| --- | --- |
+| `minimal` | SSR locals, buyer headers, prerendered page, API route, 404 page, user middleware, Hydrogen routes, node: fallbacks; also used by the `dev` and `pack` tests |
+| `base-path` | `base: '/shop'` with static output, in the Worker and through `preview()` |
+| `hydrogen-config` | every `src/hydrogen.config.ts` hook |
+| `customer-account` | `customerAccount: true` login, logout and session errors |
+| `features` | Actions, `astro:env`, `Astro.session`, a Preact island, i18n routing |
+| `node-import` | a static `node:` import must fail the build |
+| `shopify-scripts` | `<ShopifyScripts />` |
+| `prerendered-404` | a prerendered `404.astro` next to Hydrogen routes (documents a known gap) |
+
+## Writing a test
+
+```js
+import { buildFixture } from '../helpers/fixture.js';
+
+const site = await buildFixture('minimal', { cdn: true, env: { SESSION_SECRET: '...' } });
+const res = await site.fetch('/api/cart', { headers: { 'oxygen-buyer-ip': '203.0.113.9' } });
+await site.dispose();
+```
+
+- `cdn: true` bakes `HYDROGEN_ASSET_BASE_URL` into the build and serves the client directory from a
+  simulated Oxygen CDN, as `shopify hydrogen deploy` does. Without it the Worker cannot find prerendered
+  pages (MiniOxygen has no origin asset server).
+- `env` becomes the Worker's bindings. Use it instead of a `.env` file: `.env` files are gitignored, so
+  they would not be committed with the fixture.
+- `site.logs` and `await site.waitForLog(/regex/)` expose the Worker's console output, which is kept out of
+  the test report.
+- `buildOnly(name)` runs just the build and rejects with the build error. `pathOf(name)` and `freePort()`
+  (a free port in 4480-4499) support `dev()` and `preview()` tests.
+
+## Adding a fixture
+
+1. Create `test/fixtures/<name>/` with the files above.
+2. Add `test/integration/<name>.test.js`; keep it independent of the other test files, which run in
+   parallel processes.
+3. Prefer pages that do not query Shopify. The tokenless mock.shop store is the default and needs network.

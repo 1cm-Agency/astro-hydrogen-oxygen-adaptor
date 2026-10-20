@@ -1,0 +1,5 @@
+---
+const { customerSession, shopifySession, shopifyRequestContext } = Astro.locals;
+const loggedIn = await customerSession!.isLoggedIn(shopifySession!, shopifyRequestContext);
+---
+<html><body><p id="logged-in">{String(loggedIn)}</p></body></html>

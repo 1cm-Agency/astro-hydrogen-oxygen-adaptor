@@ -1,0 +1,12 @@
+---
+const { storefront, buyer, oxygen } = Astro.locals;
+---
+<html>
+  <body>
+    <h1>minimal</h1>
+    <p id="type">{storefront.type}</p>
+    <p id="has-oxygen">{String(Boolean(oxygen))}</p>
+    <pre id="buyer">{JSON.stringify(buyer)}</pre>
+    <p id="client-address">{Astro.clientAddress}</p>
+  </body>
+</html>

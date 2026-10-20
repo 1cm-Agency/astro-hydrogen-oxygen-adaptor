@@ -1,0 +1,5 @@
+---
+import { readFileSync } from 'node:fs';
+const text = readFileSync('/dev/null', 'utf8');
+---
+<html><body>{text}</body></html>

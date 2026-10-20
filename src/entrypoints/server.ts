@@ -2,10 +2,12 @@
  * Oxygen module Worker. This is the file `shopify hydrogen deploy` uploads as `dist/server/index.js`,
  * and the entry MiniOxygen executes in `astro dev`, so dev and production share one request path.
  */
+import type { RouteData } from 'astro';
 import { createApp } from 'astro/app/entrypoint';
 import { setGetEnv } from 'astro/env/setup';
-import { assetBaseUrl, base, cacheName } from 'virtual:astro-hydrogen/options';
+import { assetBaseUrl, base, cacheName, middleware, prerendered404 } from 'virtual:astro-hydrogen/options';
 import type { OxygenEnv, OxygenRuntime } from '../config.js';
+import { handleUnmatchedRequest } from '../runtime/hydrogen-request.js';
 import { getClientIp } from '../runtime/client-ip.js';
 import { fetchPrerenderedPage, isStaticAssetSubrequest } from '../runtime/assets.js';
 
@@ -29,7 +31,7 @@ export default {
       const waitUntil = executionContext.waitUntil.bind(executionContext);
       const oxygen: OxygenRuntime = { env, waitUntil, cache: await openCache() };
 
-      let routeData;
+      let routeData: RouteData | undefined;
       if (app.isDev()) {
         routeData = (await app.devMatch(app.getPathnameFromRequest(request)))?.routeData;
       } else {
@@ -43,6 +45,13 @@ export default {
           });
           if (page) return page;
         }
+      }
+
+      // With a prerendered 404 page, Astro renders unmatched URLs from the static error page and skips
+      // Hydrogen's middleware handling, so its routes and redirects (/api/cart, /admin, ...) run here.
+      if (prerendered404 && middleware && !isStaticAssetSubrequest(request) && isUnmatched(request, routeData)) {
+        const response = await handleUnmatchedRequest({ request, url: new URL(request.url), runtime: oxygen });
+        if (response) return response;
       }
 
       return await app.render(request, {
@@ -66,6 +75,18 @@ export default {
     }
   },
 };
+
+/**
+ * True when no page answers the URL. In production that is no match at all, prerendered or not. In
+ * dev `devMatch` falls back to the `/404` route itself, which the middleware sees as a prerendered
+ * page, so that match counts as a miss unless `/404` was what the buyer asked for.
+ */
+function isUnmatched(request: Request, routeData: RouteData | undefined): boolean {
+  if (app.isDev()) {
+    return !routeData || (routeData.route === '/404' && app.removeBase(new URL(request.url).pathname).replace(/\/+$/, '') !== '/404');
+  }
+  return !routeData && !app.match(request, true);
+}
 
 async function openCache(): Promise<Cache | undefined> {
   try {

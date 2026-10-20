@@ -1,0 +1,4 @@
+---
+const crypto = await import('node:crypto').catch(() => null);
+---
+<html><body><p id="crypto">{crypto ? 'node-crypto' : 'fallback'}</p></body></html>

@@ -1,0 +1,10 @@
+---
+let session = 'unset';
+try {
+  session = typeof Astro.session;
+  await Astro.session?.get('x');
+} catch (error) {
+  session = `error: ${(error as Error).message}`;
+}
+---
+<html><body><p id="session">{session}</p></body></html>

@@ -3,126 +3,46 @@
  *
  * Request -> handleShopifyRoutes() -> Astro routing -> handleShopifyRedirects() on 404
  */
-import {
-  createCartServerHandlers,
-  createPredictiveSearchServerHandlers,
-  createShopifyRequestContext,
-  createShopifyRouteTemplates,
-  handleShopifyRedirects,
-  handleShopifyRoutes,
-  type I18nConfig,
-  type ShopifyRequestContext,
-  type ShopifyRouteHandlerGroup,
-} from '@shopify/hydrogen';
 import type { MiddlewareHandler } from 'astro';
-import { createCustomerAccountClient } from '@shopify/hydrogen/customer-account';
-import type { HydrogenLocals, HydrogenRequestArgs, OxygenEnv } from '../config.js';
-import { createCookieSessionManager } from '../runtime/cookie-session.js';
-import { getCustomerAccountSetup, MISSING } from '../runtime/customer-account.js';
-import { getOxygenBuyer } from '../runtime/buyer.js';
-import { getClientIp } from '../runtime/client-ip.js';
-import { getMemoryCache } from '../runtime/memory-cache.js';
-import { createRequestSessionManager } from '../runtime/session.js';
-import { createDefaultStorefrontClient } from '../runtime/storefront.js';
-import { config, routeTemplates as customRouteTemplates } from '../runtime/user-config.js';
-
-const DEFAULT_I18N: I18nConfig = { country: 'US', language: 'EN' };
-
-const routeTemplates = customRouteTemplates ?? createShopifyRouteTemplates({});
-let defaultHandlers: readonly ShopifyRouteHandlerGroup[] | undefined;
-const customerAccountEnabled = Boolean(config.customerAccount);
+import type { HydrogenLocals } from '../config.js';
+import { matchShopifyRedirect, matchShopifyRoute, prepareHydrogenRequest } from '../runtime/hydrogen-request.js';
+import type { ShopifyRequestContext } from '@shopify/hydrogen';
 
 export const onRequest: MiddlewareHandler = async (context, next) => {
   const locals = context.locals as HydrogenLocals;
-  const runtime = locals.oxygen;
   const isPrerendered = context.isPrerendered;
-  const args: HydrogenRequestArgs = {
+  const prepared = await prepareHydrogenRequest({
     request: context.request,
     url: context.url,
-    env: runtime?.env ?? (globalThis.process?.env as OxygenEnv | undefined) ?? {},
-    runtime,
+    runtime: locals.oxygen,
     isPrerendered,
-  };
+  });
 
-  const i18n = typeof config.i18n === 'function' ? await config.i18n(args) : (config.i18n ?? DEFAULT_I18N);
-  const buyerIp = isPrerendered ? undefined : (config.getBuyerIp ?? defaultGetBuyerIp)(args);
-
-  // A prerendered page has no buyer: its request carries build-time headers only.
-  const request = isPrerendered ? { headers: new Headers() } : context.request;
-  const requestContext: ShopifyRequestContext = buyerIp
-    ? createShopifyRequestContext({ request, i18n, buyerIp })
-    : createShopifyRequestContext({ request, i18n });
-
-  const storefrontArgs = {
-    ...args,
-    requestContext,
-    buyerIp,
-    cache: runtime?.cache ?? getMemoryCache(),
-    waitUntil: runtime?.waitUntil,
-  };
-  const storefront = config.storefront
-    ? await config.storefront(storefrontArgs)
-    : createDefaultStorefrontClient(storefrontArgs);
-
-  locals.storefront = storefront;
-  locals.shopifyRequestContext = requestContext;
+  locals.storefront = prepared.storefront;
+  locals.shopifyRequestContext = prepared.requestContext;
 
   if (isPrerendered) return next();
 
-  locals.buyer = getOxygenBuyer(context.request.headers, buyerIp);
-
-  const secret = typeof args.env.SESSION_SECRET === 'string' ? args.env.SESSION_SECRET : '';
-  if (customerAccountEnabled && !config.sessionManager && !secret) throw new Error(MISSING('SESSION_SECRET'));
-  const sessionManager = config.sessionManager
-    ? await config.sessionManager(args)
-    : secret
-      ? createCookieSessionManager({ request: context.request, secret })
-      : createRequestSessionManager(context.request);
+  locals.buyer = prepared.buyer;
+  const sessionManager = prepared.sessionManager!;
   locals.shopifySession = sessionManager;
-
-  const customerAccount = config.customerAccount
-    ? getCustomerAccountSetup(args.env, config.customerAccount)
-    : undefined;
-  if (customerAccount) {
-    locals.customerSession = customerAccount.customerSession;
-    locals.customerAccount = createCustomerAccountClient({ shopId: customerAccount.shopId, requestContext });
+  if (prepared.customerAccount) {
+    locals.customerSession = prepared.customerSession;
+    locals.customerAccount = prepared.customerAccount;
   }
-  const defaults = customerAccount?.handlers ?? (defaultHandlers ??= [
-    createCartServerHandlers(),
-    createPredictiveSearchServerHandlers(),
-  ]);
-  const handlers = typeof config.handlers === 'function' ? await config.handlers({ ...args, defaults }) : (config.handlers ?? defaults);
 
-  if (config.shopifyRoutes !== false) {
-    const shopifyRoute = handleShopifyRoutes({
-      request: context.request,
-      requestContext,
-      sessionManager,
-      storefrontClient: storefront,
-      routeTemplates,
-      handlers,
-    });
-    // Matched Shopify responses already carry the request context's headers.
-    if (shopifyRoute) return shopifyRoute;
-  }
+  const shopifyRoute = await matchShopifyRoute(context.request, prepared);
+  if (shopifyRoute) return shopifyRoute;
 
   const response = await next();
 
-  if (response.status === 404 && config.shopifyRedirects !== false) {
-    const redirect = await handleShopifyRedirects({
-      request: context.request,
-      storefrontClient: storefront,
-      routeTemplates,
-    });
+  if (response.status === 404) {
+    const redirect = await matchShopifyRedirect(context.request, prepared);
     if (redirect) return redirect;
   }
 
-  return finalizeResponse(response, requestContext, await sessionManager.commit?.());
+  return finalizeResponse(response, prepared.requestContext, await sessionManager.commit?.());
 };
-
-function defaultGetBuyerIp({ request }: HydrogenRequestArgs): string | undefined {
-  return getClientIp(request.headers.get('oxygen-buyer-ip'));
-}
 
 /** Commit session headers first, then let Hydrogen apply SFAPI cookies and cache safety. */
 function finalizeResponse(

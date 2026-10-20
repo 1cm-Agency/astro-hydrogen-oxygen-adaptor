@@ -1,0 +1,10 @@
+---
+const { shopifyRequestContext, storefront, buyer } = Astro.locals;
+---
+<html>
+  <body>
+    <pre id="i18n">{JSON.stringify(shopifyRequestContext.i18n)}</pre>
+    <p id="custom-factory">{String((storefront as { customFactory?: boolean }).customFactory)}</p>
+    <pre id="buyer">{JSON.stringify(buyer)}</pre>
+  </body>
+</html>

@@ -10,4 +10,11 @@ declare module 'virtual:astro-hydrogen/options' {
   export const base: string;
   /** Oxygen's asset CDN base URL for this deployment, when building for `shopify hydrogen deploy`. */
   export const assetBaseUrl: string | undefined;
+  /** Whether the adapter's Hydrogen middleware is injected (the `middleware` adapter option). */
+  export const middleware: boolean;
+  /**
+   * Whether the project's `404` page is prerendered. Astro then renders unmatched URLs from the static
+   * file without running middleware, so the Worker entry handles Hydrogen routes for them itself.
+   */
+  export const prerendered404: boolean;
 }

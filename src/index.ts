@@ -1,14 +1,20 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import { readdir, rename, rm, rmdir, writeFile } from 'node:fs/promises';
-import { isAbsolute, join, resolve } from 'node:path';
+import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { parseEnv } from 'node:util';
-import { oxygen, type OxygenPlugin } from '@shopify/mini-oxygen/vite';
 import type { AstroConfig, AstroIntegration } from 'astro';
 import { passthroughImageService } from 'astro/config';
-import { build as rolldownBuild, type Plugin as RolldownPlugin } from 'rolldown';
-import type { Plugin, PluginOption } from 'vite';
+import type { PluginOption } from 'vite';
+import {
+  bundleWorker,
+  isPrerendered404,
+  loadDotEnvIntoProcess,
+  miniOxygenDevPlugins,
+  oxygenWorkerPlugin,
+  readDotEnv,
+  resolveConfigFile,
+  singleHydrogenBuildPlugin,
+  virtualModulesPlugin,
+  type RouteState,
+} from './build.js';
 
 export type {
   HydrogenConfig,
@@ -63,13 +69,6 @@ export interface PreviewOptions {
 
 const NAME = 'astro-hydrogen';
 const DEFAULT_COMPATIBILITY_DATE = '2026-04-01';
-const CONFIG_FILE_CANDIDATES = ['ts', 'mts', 'js', 'mjs'].map((ext) => `src/hydrogen.config.${ext}`);
-const VIRTUAL_CONFIG = 'virtual:astro-hydrogen/config';
-const VIRTUAL_OPTIONS = 'virtual:astro-hydrogen/options';
-// Oxygen has no `process` global, and some dependencies read `process.env.X` or
-// `process.platform` while their module evaluates. Only `process.env.NODE_ENV` is replaced at build time.
-const PROCESS_SHIM = 'globalThis.process ??= {}; globalThis.process.env ??= {};';
-const WORKER_CONDITIONS = ['worker', 'workerd', 'module', 'browser', 'development|production'];
 
 /**
  * Astro adapter that builds a Shopify Oxygen Worker and wires Hydrogen into every request.
@@ -83,6 +82,7 @@ const WORKER_CONDITIONS = ['worker', 'workerd', 'module', 'browser', 'developmen
 export default function hydrogen(options: HydrogenAdapterOptions = {}): AstroIntegration {
   const compatibilityDate = options.compatibilityDate ?? DEFAULT_COMPATIBILITY_DATE;
   let astroConfig: AstroConfig;
+  const routes: RouteState = { prerendered404: false };
 
   return {
     name: NAME,
@@ -113,7 +113,14 @@ export default function hydrogen(options: HydrogenAdapterOptions = {}): AstroInt
         if (configFile) addWatchFile(configFile);
 
         const plugins: PluginOption[] = [
-          virtualModulesPlugin({ configFile, cacheName: options.cacheName ?? 'hydrogen', assetBaseUrl, base: config.base }),
+          virtualModulesPlugin({
+            configFile,
+            cacheName: options.cacheName ?? 'hydrogen',
+            assetBaseUrl,
+            base: config.base,
+            middleware: options.middleware !== false,
+            routes,
+          }),
           oxygenWorkerPlugin(root),
           singleHydrogenBuildPlugin(root),
         ];
@@ -175,6 +182,12 @@ export default function hydrogen(options: HydrogenAdapterOptions = {}): AstroInt
         });
       },
 
+      // Runs when Astro builds its route list: before the build bundles the Worker, and before
+      // `astro dev` serves its first request. The virtual options module reads the result lazily.
+      'astro:routes:resolved': ({ routes: resolved }) => {
+        routes.prerendered404 = isPrerendered404(resolved);
+      },
+
       'astro:build:done': async ({ logger }) => {
         const workerDir = astroConfig.build.server;
         await bundleWorker(workerDir);
@@ -196,218 +209,3 @@ export default function hydrogen(options: HydrogenAdapterOptions = {}): AstroInt
   }
 }
 
-/**
- * Prerendering runs in Node at build time, with no Worker env. Expose `.env` values through
- * `process.env` so the middleware can still reach the store, as Oxygen's bindings would at runtime.
- */
-function loadDotEnvIntoProcess(root: string, mode: string) {
-  for (const [key, value] of Object.entries(readDotEnv(root, mode))) {
-    process.env[key] ??= value;
-  }
-}
-
-/**
- * Reads only the `.env` files, in Vite's precedence order. Unlike Vite's `loadEnv` with an empty
- * prefix, this leaves out the shell's own environment, which has no place in the Worker's `env`.
- */
-function readDotEnv(root: string, mode: string): Record<string, string> {
-  const env: Record<string, string> = {};
-  for (const file of ['.env', '.env.local', `.env.${mode}`, `.env.${mode}.local`]) {
-    const path = join(root, file);
-    if (existsSync(path)) Object.assign(env, parseEnv(readFileSync(path, 'utf8')));
-  }
-  return env;
-}
-
-function resolveConfigFile(root: string, configFile: string | undefined): string | undefined {
-  if (configFile) {
-    const path = isAbsolute(configFile) ? configFile : resolve(root, configFile);
-    if (!existsSync(path)) throw new Error(`[${NAME}] configFile not found: ${path}`);
-    return path;
-  }
-  return CONFIG_FILE_CANDIDATES.map((candidate) => resolve(root, candidate)).find((path) => existsSync(path));
-}
-
-function virtualModulesPlugin(values: {
-  configFile: string | undefined;
-  cacheName: string;
-  assetBaseUrl: string | undefined;
-  base: string;
-}): Plugin {
-  const resolved = (id: string) => `\0${id}`;
-  return {
-    name: `${NAME}:virtual`,
-    resolveId(id) {
-      if (id === VIRTUAL_CONFIG || id === VIRTUAL_OPTIONS) return resolved(id);
-    },
-    load(id) {
-      if (id === resolved(VIRTUAL_CONFIG)) {
-        return values.configFile
-          ? `export { default } from ${JSON.stringify(values.configFile)};`
-          : 'export default {};';
-      }
-      if (id === resolved(VIRTUAL_OPTIONS)) {
-        return [
-          `export const cacheName = ${JSON.stringify(values.cacheName)};`,
-          `export const base = ${JSON.stringify(values.base.replace(/\/+$/, ''))};`,
-          `export const assetBaseUrl = ${JSON.stringify(values.assetBaseUrl)};`,
-        ].join('\n');
-      }
-    },
-  };
-}
-
-/**
- * CommonJS packages the server loads in dev. workerd runs only ES modules, and MiniOxygen does not
- * pre-bundle server dependencies by itself, so list them here; uninstalled ones are skipped.
- * `a > b` is Vite's syntax for `b` as resolved from `a`.
- */
-const COMMONJS_SERVER_DEPS = [
-  'astro > picomatch',
-  'react',
-  'react/jsx-runtime',
-  'react/jsx-dev-runtime',
-  'react-dom',
-  'react-dom/server',
-];
-
-function installedDeps(root: string, specifiers: string[]): string[] {
-  return specifiers.filter((specifier) => {
-    let from = join(root, 'package.json');
-    try {
-      for (const id of specifier.split(' > ')) {
-        from = createRequire(from).resolve(id.includes('/') ? id : `${id}/package.json`);
-      }
-      return true;
-    } catch {
-      return false;
-    }
-  });
-}
-
-/** Resolves the `ssr` environment for Workers and bundles every dependency into it. */
-function oxygenWorkerPlugin(root: string): Plugin {
-  return {
-    name: `${NAME}:worker`,
-    configEnvironment(name, _options, { mode, command }) {
-      if (name !== 'ssr') return;
-      return {
-        resolve: { conditions: WORKER_CONDITIONS, noExternal: true },
-        // Workers have no `process`; CommonJS packages such as React branch on this at load time.
-        define: { 'process.env.NODE_ENV': JSON.stringify(mode === 'production' ? 'production' : 'development') },
-        ...(command === 'serve' && { optimizeDeps: { include: installedDeps(root, COMMONJS_SERVER_DEPS) } }),
-      };
-    },
-  };
-}
-
-/**
- * `@shopify/hydrogen`'s main export has a `development` condition, but its sub-paths such as
- * `./customer-account` do not. In `astro dev`, Vite's `development` condition would therefore load
- * two copies of Hydrogen's core on the server, and `createCustomerAccountServerHandlers` would not
- * recognise cart handlers created by the other copy. Resolve the main entry the way Node does,
- * without the `development` condition, so the server runs one build of Hydrogen.
- */
-function singleHydrogenBuildPlugin(root: string): Plugin {
-  const require = createRequire(join(root, 'package.json'));
-  return {
-    name: `${NAME}:single-hydrogen-build`,
-    apply: 'serve',
-    enforce: 'pre',
-    applyToEnvironment: (environment) => environment.name === 'ssr',
-    resolveId(id) {
-      if (id !== '@shopify/hydrogen') return;
-      try {
-        return require.resolve(id);
-      } catch {
-        return;
-      }
-    },
-  };
-}
-
-/**
- * Oxygen runs one Worker module. Astro's SSR build emits an entry plus chunks (and post-processes
- * them), so once it is done, inline the chunks into `index.js` and remove them.
- */
-async function bundleWorker(workerDir: URL) {
-  const entry = fileURLToPath(new URL('index.js', workerDir));
-  const bundled = fileURLToPath(new URL('index.bundled.js', workerDir));
-
-  const staticNodeImports = new Set<string>();
-  const output = await rolldownBuild({
-    input: entry,
-    platform: 'neutral',
-    external: [/^cloudflare:/],
-    logLevel: 'warn',
-    plugins: [nodeBuiltinsPlugin(staticNodeImports)],
-    output: { file: bundled, format: 'esm', codeSplitting: false, banner: PROCESS_SHIM },
-  });
-  if (staticNodeImports.size > 0) {
-    await rm(bundled, { force: true });
-    throw new Error(
-      `Oxygen has no Node.js built-in modules, but the Worker imports:\n  ${[...staticNodeImports].join('\n  ')}\n` +
-        'Use a Web-compatible alternative for these dependencies.',
-    );
-  }
-
-  const workerDirPath = fileURLToPath(workerDir);
-  const inlinedFiles = output.output
-    .flatMap((chunk) => (chunk.type === 'chunk' ? chunk.moduleIds : []))
-    .filter((id) => id.startsWith(workerDirPath));
-  await Promise.all(inlinedFiles.map((file) => rm(file, { force: true })));
-  await rename(bundled, entry);
-  await removeEmptyDirs(workerDirPath);
-}
-
-// `import("node:x")`, including with `/* @vite-ignore */`-style comments, which Rolldown leaves alone.
-const DYNAMIC_NODE_IMPORT = /\bimport\(\s*(?:\/\*[\s\S]*?\*\/\s*)*(["'])(node:[^"']+)\1\s*\)/g;
-
-/**
- * Oxygen runs with no compatibility flags, so `node:*` modules do not exist there, and workerd
- * refuses to start a Worker that references a module it cannot resolve, even one that is only
- * imported dynamically. Dependencies often keep a Node fallback behind `await import('node:…')`
- * (`@astrojs/react` does, for `node:stream`), so turn those into rejected promises, and collect
- * static imports, which would always fail, to report them.
- */
-function nodeBuiltinsPlugin(staticNodeImports: Set<string>): RolldownPlugin {
-  return {
-    name: 'astro-hydrogen:node-builtins',
-    resolveId(id, importer, { kind }) {
-      if (!id.startsWith('node:')) return;
-      if (kind !== 'dynamic-import') staticNodeImports.add(importer ? `${id} (from ${importer})` : id);
-      return { id, external: true };
-    },
-    renderChunk(code) {
-      if (!code.includes('node:')) return;
-      return code.replace(DYNAMIC_NODE_IMPORT, (_, _quote, id: string) =>
-        `Promise.reject(new Error(${JSON.stringify(`${id} is not available on Oxygen.`)}))`,
-      );
-    },
-  };
-}
-
-async function removeEmptyDirs(dir: string) {
-  for (const entry of await readdir(dir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const path = join(dir, entry.name);
-    await removeEmptyDirs(path);
-    if ((await readdir(path)).length === 0) await rmdir(path);
-  }
-}
-
-/** Runs the `ssr` environment inside MiniOxygen (workerd) during `astro dev`. */
-function miniOxygenDevPlugins(
-  miniOxygen: NonNullable<HydrogenAdapterOptions['miniOxygen']>,
-  compatibilityDate: string,
-): Plugin[] {
-  const plugins = oxygen({
-    entry: fileURLToPath(new URL('./entrypoints/server.js', import.meta.url)),
-    env: miniOxygen.env,
-    inspectorPort: miniOxygen.inspectorPort,
-    debug: miniOxygen.debug,
-  });
-  const main = plugins.find((plugin) => plugin.name === 'oxygen:main') as OxygenPlugin | undefined;
-  main?.api?.registerPluginOptions({ compatibilityDate });
-  return plugins;
-}

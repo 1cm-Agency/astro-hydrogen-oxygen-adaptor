@@ -51,7 +51,9 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test 'test/**/*.test.js'"
+    "test": "npm run build && node --test 'test/*.test.js'",
+    "test:coverage": "npm run build && node --test --experimental-test-coverage --test-coverage-include='dist/**' 'test/*.test.js'",
+    "test:integration": "npm run build && node --test 'test/integration/*.test.js'"
   },
   "dependencies": {
     "@shopify/mini-oxygen": "^4.2.3",
