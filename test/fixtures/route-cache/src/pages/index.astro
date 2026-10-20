@@ -1,0 +1,6 @@
+---
+Astro.cache.set({ maxAge: 60, swr: 300, tags: ['t1'] });
+const now = Date.now();
+console.log(`render index ${now}`);
+---
+<html><body><p id="now">{now}</p></body></html>

@@ -1,0 +1,7 @@
+---
+Astro.cache.set({ maxAge: 60, tags: ['t3'] });
+Astro.cookies.set('visitor', 'yes', { path: '/' });
+const now = Date.now();
+console.log(`render cookie ${now}`);
+---
+<html><body><p id="now">{now}</p></body></html>

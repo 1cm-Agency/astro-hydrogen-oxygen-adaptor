@@ -1,0 +1,21 @@
+---
+import { getLiveCollection, getLiveEntry } from 'astro:content';
+
+const { entries, error, cacheHint } = await getLiveCollection('liveProducts', { first: 3 });
+const { entry, cacheHint: entryHint } = await getLiveEntry('liveProducts', { handle: 'slides' });
+
+if (Astro.cache?.enabled) Astro.cache.set(cacheHint ?? false);
+---
+
+<html>
+  <body>
+    <p id="error">{error ? error.message : ''}</p>
+    <ul id="products">
+      {(entries ?? []).map((p) => <li data-id={p.id}>{p.data.title}</li>)}
+    </ul>
+    <h1 id="entry">{entry?.data.title}</h1>
+    <div id="entry-html" set:html={entry?.rendered?.html} />
+    <pre id="hint">{JSON.stringify(cacheHint)}</pre>
+    <pre id="entry-hint">{JSON.stringify(entryHint)}</pre>
+  </body>
+</html>

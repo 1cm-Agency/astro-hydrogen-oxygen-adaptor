@@ -66,6 +66,14 @@
       "types": "./dist/runtime/*.d.ts",
       "default": "./dist/runtime/*.js"
     },
+    "./content": {
+      "types": "./dist/content/index.d.ts",
+      "default": "./dist/content/index.js"
+    },
+    "./cache": {
+      "types": "./dist/cache/oxygen.d.ts",
+      "default": "./dist/cache/oxygen.js"
+    },
     "./client/*": {
       "types": "./dist/client/*.d.ts",
       "default": "./dist/client/*.js"

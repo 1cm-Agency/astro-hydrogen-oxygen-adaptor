@@ -28,6 +28,8 @@ First release.
 - `Oxygen-Cache-Control` is removed from responses that Hydrogen marks private or `no-store`, so personalized pages never enter Oxygen's full-page cache.
 - `Astro.locals.customerAccount` is created on first access, so pages that never read it keep working on a non-HTTPS host.
 - `astro add astro-hydrogen` works: when only `integrations: [hydrogen()]` is configured, the integration registers itself as the adapter.
+- Content collections for the Shopify catalog, from `astro-hydrogen/content`: `shopifyLoader` (build time, `src/content.config.ts`) and `shopifyLiveLoader` (request time, `src/live.config.ts`) for products, collections, pages and articles, or any paginated Storefront query. Entries include `rendered` HTML for `render()`; `shopifySchemas` types them; live results carry a `cacheHint` (`tags`, `lastModified`, `maxAge`, `swr`) and use the Worker's sub-request cache with the strategy you pass. `shopifyCacheOptions` turns a strategy into `Astro.cache.set()` options. Catalog data only.
+- `oxygenCache()` from `astro-hydrogen/cache`: an Astro route-cache provider (`cache.provider`) backed by Oxygen's Cache API, with stale-while-revalidate emulation through `waitUntil` and best-effort tag and path invalidation. Cookie-setting and private responses are never cached.
 - In `astro dev`, a single copy of `@shopify/hydrogen` is loaded for the server, and the CommonJS packages that Astro and React need are pre-bundled for workerd.
 
 ### Fixed

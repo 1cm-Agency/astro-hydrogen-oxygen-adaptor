@@ -1,0 +1,23 @@
+---
+import { getCollection } from 'astro:content';
+
+export const prerender = true;
+
+const products = await getCollection('products');
+const pages = await getCollection('pages');
+const articles = await getCollection('articles');
+---
+
+<html>
+  <body>
+    <ul id="products">
+      {products.map((p) => <li data-id={p.id}>{p.data.title}</li>)}
+    </ul>
+    <ul id="pages">
+      {pages.map((p) => <li><a href={`/pages/${p.id}`}>{p.data.title}</a></li>)}
+    </ul>
+    <ul id="articles">
+      {articles.map((a) => <li data-id={a.id}>{a.data.title} by {a.data.author?.name}</li>)}
+    </ul>
+  </body>
+</html>

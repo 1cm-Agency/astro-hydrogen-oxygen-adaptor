@@ -1,0 +1,13 @@
+---
+import { getLiveEntry } from 'astro:content';
+
+const { entry, error } = await getLiveEntry('liveProducts', { handle: 'nope' });
+if (error) Astro.response.status = 404;
+---
+
+<html>
+  <body>
+    <p id="entry">{entry ? entry.id : 'none'}</p>
+    <p id="error">{error?.name ?? ''}</p>
+  </body>
+</html>

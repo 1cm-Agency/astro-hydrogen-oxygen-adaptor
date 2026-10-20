@@ -1,0 +1,11 @@
+---
+import { getLiveCollection } from 'astro:content';
+
+const { entries } = await getLiveCollection('liveProducts', { first: 3, country: 'CA', language: 'EN' });
+---
+
+<html>
+  <body>
+    <ul id="products">{(entries ?? []).map((p) => <li>{p.data.title}</li>)}</ul>
+  </body>
+</html>

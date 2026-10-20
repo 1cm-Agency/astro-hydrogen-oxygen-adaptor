@@ -21,6 +21,8 @@ exits).
 | `shopify-scripts` | `<ShopifyScripts />` |
 | `elements` | `<Money />`, `<ShopifyImage />`, `<ShopPayButton />` and `<PredictiveSearchForm />`, with an `/en-ca` market, a prerendered page and the Shop Pay link through the Hydrogen routes |
 | `cart-elements` | `<ProductForm />`, `<CartForm />`, a cart page and bare forms against mock.shop (`slides`); the no-JavaScript add, set and remove flow |
+| `content` | `shopifyLoader` (products, pages, articles; `<Content />` in a prerendered page) and `shopifyLiveLoader` (collection, entry, `cacheHint`, market filter, unknown handle, sub-request cache hit) against mock.shop; also type-checks with `astro check` |
+| `route-cache` | `cache: { provider: oxygenCache() }`: hit, stale-while-revalidate, tag invalidation, and a cookie page that is never cached, in MiniOxygen's Cache API |
 | `prerendered-404` | a prerendered `404.astro` next to Hydrogen routes: the Worker entry still serves `/api/cart` and `/admin`, in the build and under `astro dev` |
 | `integrations-only` | the config `astro add` writes (`integrations: [hydrogen()]`, no `adapter`) |
 

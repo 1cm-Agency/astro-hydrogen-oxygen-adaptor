@@ -441,6 +441,40 @@ Register the callback in the storefront's Customer Account API settings in the H
 
   The adapter removes it from any response Hydrogen marks private or `no-store` (personalized queries, customer data, consent), and Hydrogen itself removes `CDN-Cache-Control` and `Surrogate-Control`. Still, do not set it on pages that depend on cookies, the session, or `buyer`, since those are not detected automatically.
 
+### Route caching
+
+`oxygenCache()` is an Astro [route cache](https://docs.astro.build/en/guides/caching/) provider backed by Oxygen's Cache API (`caches.open()`), so `Astro.cache.set()` and `routeRules` cache whole rendered responses in the Worker's data center:
+
+```js
+// astro.config.mjs
+import { defineConfig } from 'astro/config';
+import hydrogen from 'astro-hydrogen';
+import { oxygenCache } from 'astro-hydrogen/cache';
+
+export default defineConfig({
+  adapter: hydrogen(),
+  cache: { provider: oxygenCache() }, // options: { cacheName: 'astro-routes', keyPrefix?: string }
+  routeRules: { '/blog/[...path]': { maxAge: 300, swr: 60, tags: ['blog'] } },
+});
+```
+
+```astro
+---
+Astro.cache.set({ maxAge: 60, swr: 300, tags: ['product-123'] });
+---
+```
+
+```js
+// an API route or middleware
+await cache.invalidate({ tags: 'product-123' }); // or { path: '/products/123' }
+```
+
+- **What is cached:** GET responses with status 200 and a `maxAge`. Responses that set a cookie, send `Cache-Control: private` or `no-store`, or `Vary: Cookie` are never cached. Pages that depend on the visitor's session must not be given a `maxAge`. The cache key is the path plus the sorted query string; tracking parameters such as `utm_*` are ignored.
+- **Stale-while-revalidate is emulated.** The Cache API has no SWR, so each entry records when it was stored. Within `swr` seconds after `maxAge`, the stale page is served and a refresh is scheduled with `waitUntil`.
+- **Tags are best-effort.** Invalidation writes a marker per tag (and per path) that is checked on each lookup. The Oxygen cache is per data center and entries can be evicted, so an invalidation only takes effect in the data center that handled it; treat tags as a freshness hint, not a guarantee. Entries are kept at most 7 days.
+- **Environments:** works on Oxygen, in MiniOxygen and in `astro preview`. It does nothing in `astro dev` (Astro disables route caching there) or while prerendering in Node (one warning, requests pass through).
+- **With live collections:** pass a live collection's `cacheHint` plus `shopifyCacheOptions(strategy)` to `Astro.cache.set()` (see [Content collections](#content-collections)) so the rendered page and the data it came from expire together.
+
 ## Analytics and consent
 
 Render `<ShopifyScripts />` once in the `<head>` of your layout:
@@ -601,6 +635,95 @@ const stop = onCart((cart) => render(cart));
 
 `astro-hydrogen/runtime/image` exports `shopifyImageUrl(url, { width, height, crop })`, `shopifyImageSrcSet(url, { widths, height, crop })` and `isShopifyImageHost(hostname)`. `astro-hydrogen/runtime/money` exports `resolveLocale(i18n)`, which turns `{ language: 'EN', country: 'CA' }` into `en-CA`, and `formatPrice(money | [min, max], { locale?, i18n?, ...formatMoneyOptions })`, which returns the localized string. Use them where a component does not fit, such as `og:image` URLs or client islands.
 
+## Content collections
+
+`astro-hydrogen/content` has two loaders that read the Shopify catalog (products, collections, pages and blog articles) through Astro's content layer. Both use a buyer-less Storefront client, so they never see a cart or a customer: **they are for catalog data only.** Do not point them at personalized queries.
+
+| | `shopifyLoader` | `shopifyLiveLoader` |
+| --- | --- | --- |
+| Config file | `src/content.config.ts` | `src/live.config.ts` |
+| Runs | at build time (and `astro sync`), into the content store | on every `getLiveCollection()` / `getLiveEntry()` call |
+| Read with | `getCollection()`, `getEntry()`, `render()` | `getLiveCollection()`, `getLiveEntry()` |
+| Freshness | as of the last build | as fresh as the cache strategy allows |
+| Pages | prerendered or on demand | on-demand only (live collections need on-demand rendering) |
+| Caching | none: the store is the cache | Hydrogen sub-request cache with the strategy you pass |
+
+Use the build-time loader for content that changes rarely (pages, articles, a small catalog) and you want in static pages, with `render()` and `<Content />`. Use the live loader for catalogs that change often or are too big to load at build time.
+
+```ts
+// src/content.config.ts
+import { defineCollection } from 'astro:content';
+import { shopifyLoader } from 'astro-hydrogen/content';
+
+export const collections = {
+  products: defineCollection({ loader: shopifyLoader({ resource: 'products', query: 'tag:featured', max: 200 }) }),
+  pages: defineCollection({ loader: shopifyLoader({ resource: 'pages' }) }),
+};
+```
+
+```ts
+// src/live.config.ts
+import { defineLiveCollection } from 'astro:content';
+import { Cache } from '@shopify/hydrogen';
+import { shopifyLiveLoader } from 'astro-hydrogen/content';
+
+export const collections = {
+  liveProducts: defineLiveCollection({ loader: shopifyLiveLoader({ resource: 'products', cache: Cache.long() }) }),
+};
+```
+
+```astro
+---
+import { getLiveCollection, getLiveEntry } from 'astro:content';
+import { Cache } from '@shopify/hydrogen';
+import { shopifyCacheOptions } from 'astro-hydrogen/content';
+
+const { entries, error, cacheHint } = await getLiveCollection('liveProducts', { first: 12, query: 'tag:sale' });
+const { entry } = await getLiveEntry('liveProducts', { handle: Astro.params.handle });
+if (!entry) return new Response(null, { status: 404 });
+
+// Tags and lastModified come from the hint; the window comes from the loader's strategy.
+if (Astro.cache?.enabled) Astro.cache.set({ ...cacheHint, ...shopifyCacheOptions(Cache.long()) });
+---
+```
+
+Entry IDs are handles (`slides`), or `blog-handle/article-handle` for articles, so `getEntry('products', 'slides')` works. The full Storefront object is in `entry.data` (including its global `id`), and `entry.rendered.html` holds the description (products, collections), body (pages) or content (articles), which is what `render()` outputs. Rendered HTML comes from Shopify and is not sanitized.
+
+### `shopifyLoader` options
+
+| Option | Default | |
+| --- | --- | --- |
+| `resource` | | `'products'`, `'collections'`, `'pages'` or `'articles'`. |
+| `query` | | Storefront search syntax, e.g. `tag:sale AND available_for_sale:true`. |
+| `sortKey`, `reverse` | | Sorting; `sortKey` is the resource's Storefront sort key, e.g. `TITLE`. |
+| `first` | `50` | Page size per Storefront request (the API allows up to 250). |
+| `max` | `Infinity` | Stop after this many entries. |
+| `i18n` | `hydrogen.config.ts` `i18n` if it is an object, else `{ country: 'US', language: 'EN' }` | The market for prices and translations. |
+
+For anything else, pass `{ query, variables?, entries, first?, max?, i18n? }` instead of `resource`. `query` takes `$first` and `$after` and selects `pageInfo { hasNextPage endCursor }`; `entries(data)` returns `{ id, data, body?, rendered? }[]` for each page. `$country` and `$language` are filled in when the query declares them. Entries that disappear from Shopify are removed from the store on the next load, and the loader logs a progress line.
+
+With a `resource`, the loader supplies a loose (`passthrough`) Zod schema, so `getCollection()` is typed and extra fields survive. A `schema` in `defineCollection` replaces it; start from `shopifySchemas.products.extend({ ... })` to keep the rest.
+
+### `shopifyLiveLoader` options
+
+| Option | Default | |
+| --- | --- | --- |
+| `resource` | | As above. |
+| `cache` | `Cache.short()` | The sub-request cache strategy for every query. `Cache.none()` skips the cache. |
+| `first` | `20` | Default page size. |
+| `i18n` | as above | Default market. |
+
+Generic form: `{ query, variables?, entries, entry?, entryQuery?, cache?, i18n? }`. Filter keys are passed to the query as variables. `entry(data)` picks the entry from a `loadEntry` response (default: the first of `entries(data)`).
+
+Filters:
+
+- `getLiveCollection(name, { query?, first?, after?, sortKey?, reverse?, country?, language? })`. The loader gets no request, so the market comes from `i18n`, and `country` / `language` override it per call, e.g. from `Astro.currentLocale` or `Astro.locals.buyer`.
+- `getLiveEntry(name, { id } | { handle })`, plus the same `country` / `language`. `id` is the entry ID or a global ID (`gid://shopify/Product/1`). An unknown handle gives no entry: `getLiveEntry` returns a `LiveEntryNotFoundError` in `error`, so you decide the status.
+
+Results carry `cacheHint: { tags, lastModified, maxAge, swr }`. Tags are `shopify:<resource>` plus each entry's global ID, so `Astro.cache.invalidate()` can purge by them; `lastModified` is the latest `updatedAt`. Astro keeps only `tags` and `lastModified` of a hint when it returns it, and its `Astro.cache.set()` reads `maxAge` / `swr` from options, so use `shopifyCacheOptions(strategy)` (as above) for the window. Failures (GraphQL errors, network, throttling) come back as `error`, a `ShopifyLoaderError` with the GraphQL `errors` on it.
+
+The live loader reads the Worker's `caches.open()` store, per data center, with the strategy you pass. A loader has no request, so there is no `waitUntil`: cache writes are awaited. Outside a Worker, at build time, queries use the in-memory cache. Because the cache key is the query and its variables, different `first`, `query` or market values are cached separately.
+
 ## Prerendering, assets and `base`
 
 `export const prerender = true` works as usual, as does `output: 'static'` with `prerender = false` on individual pages.
@@ -685,7 +808,7 @@ Deployments are immutable: each deploy uploads new code and assets under a new a
 | `Astro.session` | No driver by default; see [Sessions](#sessions). |
 | Images | Sharp for prerendered pages at build time (Astro 7.4+); passthrough at runtime, no resizing. Shopify CDN images are sized by URL with `<ShopifyImage />`. |
 | Fonts | Untested. |
-| Content collections | Not exercised by this package's tests. Build-time collections do not depend on the adapter; live collections are untested. |
+| Content collections | Supported for Shopify catalog data: build-time (`shopifyLoader`) and live (`shopifyLiveLoader`) loaders, both covered by a fixture against mock.shop; see [Content collections](#content-collections). Other loaders do not depend on the adapter. |
 
 UI frameworks: Preact is tested (playground and fixtures). React and Vue build, and rendered in the Worker and in dev when checked by hand. Svelte, Solid and others are untested.
 

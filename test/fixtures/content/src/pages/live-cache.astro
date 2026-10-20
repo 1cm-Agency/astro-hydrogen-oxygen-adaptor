@@ -1,0 +1,28 @@
+---
+import { getLiveCollection } from 'astro:content';
+
+// Count the Worker's outgoing Storefront requests.
+const globals = globalThis as typeof globalThis & { __storefrontCalls?: number };
+if (globals.__storefrontCalls === undefined) {
+  globals.__storefrontCalls = 0;
+  const original = globalThis.fetch;
+  globalThis.fetch = (input, init) => {
+    globals.__storefrontCalls!++;
+    return original(input, init);
+  };
+}
+
+const before = globals.__storefrontCalls;
+const first = await getLiveCollection('cachedProducts', { first: 2 });
+const afterFirst = globals.__storefrontCalls;
+const second = await getLiveCollection('cachedProducts', { first: 2 });
+const afterSecond = globals.__storefrontCalls;
+---
+
+<html>
+  <body>
+    <pre id="counts">{JSON.stringify({ firstRequests: afterFirst - before, secondRequests: afterSecond - afterFirst })}</pre>
+    <p id="same">{String(first.entries?.map((e) => e.id).join() === second.entries?.map((e) => e.id).join())}</p>
+    <p id="size">{first.entries?.length}</p>
+  </body>
+</html>

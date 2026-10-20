@@ -10,6 +10,7 @@ import { assetBaseUrl, base, cacheName, middleware, prerendered404 } from 'virtu
 import type { OxygenEnv, OxygenRuntime } from '../config.js';
 import { handleUnmatchedRequest } from '../runtime/hydrogen-request.js';
 import { getClientIp } from '../runtime/client-ip.js';
+import { setWorkerRuntime } from '../runtime/worker-runtime.js';
 import { fetchPrerenderedPage, isStaticAssetSubrequest } from '../runtime/assets.js';
 
 interface ExecutionContext {
@@ -31,6 +32,8 @@ export default {
 
       const waitUntil = executionContext.waitUntil.bind(executionContext);
       const oxygen: OxygenRuntime = { env, waitUntil, cache: await openCache() };
+      // Content loaders (src/live.config.ts) run without a request and read these.
+      setWorkerRuntime({ env, cache: oxygen.cache });
 
       let routeData: RouteData | undefined;
       if (app.isDev()) {
