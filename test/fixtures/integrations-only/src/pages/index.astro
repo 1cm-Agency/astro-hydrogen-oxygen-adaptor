@@ -1,0 +1,9 @@
+---
+export const prerender = false;
+const { storefront } = Astro.locals;
+---
+<html>
+  <body>
+    <p id="type">{storefront.type}</p>
+  </body>
+</html>

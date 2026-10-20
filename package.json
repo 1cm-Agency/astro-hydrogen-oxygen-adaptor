@@ -4,6 +4,9 @@
   "description": "Astro adapter for Shopify Hydrogen: deploy to Oxygen and get a request-scoped Storefront API client in every page, with no UI framework required.",
   "type": "module",
   "license": "MIT",
+  "sideEffects": [
+    "./dist/runtime/process-shim.js"
+  ],
   "keywords": [
     "withastro",
     "astro-adapter",
@@ -13,6 +16,7 @@
     "oxygen",
     "headless-commerce"
   ],
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -34,6 +38,22 @@
       "types": "./dist/entrypoints/preview.d.ts",
       "default": "./dist/entrypoints/preview.js"
     },
+    "./runtime/cookie-session": {
+      "types": "./dist/runtime/cookie-session.d.ts",
+      "default": "./dist/runtime/cookie-session.js"
+    },
+    "./runtime/storefront": {
+      "types": "./dist/runtime/storefront.d.ts",
+      "default": "./dist/runtime/storefront.js"
+    },
+    "./runtime/shopify-scripts": {
+      "types": "./dist/runtime/shopify-scripts.d.ts",
+      "default": "./dist/runtime/shopify-scripts.js"
+    },
+    "./runtime/hydrogen-request": {
+      "types": "./dist/runtime/hydrogen-request.d.ts",
+      "default": "./dist/runtime/hydrogen-request.js"
+    },
     "./runtime/*": {
       "types": "./dist/runtime/*.d.ts",
       "default": "./dist/runtime/*.js"
@@ -45,7 +65,9 @@
   "files": [
     "dist",
     "components",
-    "types.d.ts"
+    "types.d.ts",
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -53,7 +75,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test 'test/*.test.js'",
     "test:coverage": "npm run build && node --test --experimental-test-coverage --test-coverage-include='dist/**' 'test/*.test.js'",
-    "test:integration": "npm run build && node --test 'test/integration/*.test.js'"
+    "test:integration": "npm run build && node --test 'test/integration/*.test.js'",
+    "prepack": "npm run build"
   },
   "dependencies": {
     "@shopify/mini-oxygen": "^4.2.3",
@@ -73,5 +96,9 @@
   },
   "engines": {
     "node": "^22.12 || ^24"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }

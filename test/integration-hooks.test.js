@@ -32,6 +32,8 @@ async function setup(root, { command = 'build', options, config = {} } = {}) {
       vite: {},
       image: { service: SHARP, endpoint: {} },
       build: {},
+      // As with `adapter: hydrogen()`; the self-registration case sets `adapter: undefined`.
+      adapter: integration,
       ...config,
     },
     updateConfig: (value) => calls.updateConfig.push(value),
@@ -55,6 +57,14 @@ describe('astro:config:setup', () => {
     assert.equal(update.build.serverEntry, 'index.js');
     assert.deepEqual(calls.addMiddleware, [{ entrypoint: 'astro-hydrogen/entrypoints/middleware', order: 'pre' }]);
     assert.deepEqual(pluginNames(update), ['astro-hydrogen:virtual', 'astro-hydrogen:worker', 'astro-hydrogen:single-hydrogen-build']);
+  });
+
+  it('registers itself as the adapter when used as a plain integration (what `astro add` writes)', async () => {
+    const root = await project();
+    const { integration, calls } = await setup(root, { config: { adapter: undefined } });
+    assert.equal(calls.updateConfig.length, 2);
+    assert.deepEqual(calls.updateConfig[0], { adapter: integration });
+    assert.match(calls.info[0], /Registered as the adapter/);
   });
 
   it('skips the middleware when `middleware: false`', async () => {
@@ -90,13 +100,14 @@ describe('astro:config:setup', () => {
     assert.equal('assetsPrefix' in (await setup(root)).update.build, false);
   });
 
-  it('swaps the sharp image service for passthrough in both service shapes', async () => {
+  it('swaps the sharp image service for passthrough at runtime, keeping it for the build when split', async () => {
     const root = await project();
     const plain = await setup(root);
     assert.equal(plain.update.image.service.entrypoint, 'astro/assets/services/noop');
 
     const split = await setup(root, { config: { image: { service: { build: SHARP, runtime: SHARP }, endpoint: {} } } });
-    assert.equal(split.update.image.service.entrypoint, 'astro/assets/services/noop');
+    assert.deepEqual(split.update.image.service.build, SHARP);
+    assert.equal(split.update.image.service.runtime.entrypoint, 'astro/assets/services/noop');
 
     const runtimeCustom = await setup(root, {
       config: { image: { service: { build: SHARP, runtime: { entrypoint: './mine.ts', config: {} } }, endpoint: {} } },

@@ -2,6 +2,7 @@
  * Oxygen module Worker. This is the file `shopify hydrogen deploy` uploads as `dist/server/index.js`,
  * and the entry MiniOxygen executes in `astro dev`, so dev and production share one request path.
  */
+import '../runtime/process-shim.js'; // keep first: runs before any dependency evaluates
 import type { RouteData } from 'astro';
 import { createApp } from 'astro/app/entrypoint';
 import { setGetEnv } from 'astro/env/setup';

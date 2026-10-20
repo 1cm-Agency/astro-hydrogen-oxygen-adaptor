@@ -302,4 +302,14 @@ describe('middleware: finalizeResponse', () => {
     config.sessionManager = () => ({ commit() { throw new RangeError('boom'); } });
     await assert.rejects(run('/p'), RangeError);
   });
+
+  it('drops Oxygen-Cache-Control from private responses only', async () => {
+    const shared = new Response('page', { headers: { 'oxygen-cache-control': 'public, max-age=60' } });
+    assert.equal((await run('/p', { next: () => shared })).response.headers.get('oxygen-cache-control'), 'public, max-age=60');
+
+    const personal = new Response('page', {
+      headers: { 'oxygen-cache-control': 'public, max-age=60', 'cache-control': 'private, no-store' },
+    });
+    assert.equal((await run('/p', { next: () => personal })).response.headers.get('oxygen-cache-control'), null);
+  });
 });

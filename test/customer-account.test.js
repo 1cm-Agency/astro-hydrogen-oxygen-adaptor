@@ -96,6 +96,14 @@ describe('customerAccount middleware', () => {
     assert.equal(await locals.customerSession.isLoggedIn(locals.shopifySession, locals.shopifyRequestContext), false);
   });
 
+  it('creates the Customer Account client lazily, so pages on a non-HTTPS host still render', async () => {
+    // `new URL('http://192.0.2.10/anything')` is absolute, so it overrides the https test origin.
+    const { locals, response } = await run('http://192.0.2.10/anything');
+    assert.equal(response.status, 200);
+    assert.equal(typeof locals.customerSession.isLoggedIn, 'function');
+    assert.throws(() => locals.customerAccount, /must use HTTPS/);
+  });
+
   it('names the missing env var and the env pull command', async () => {
     for (const name of ['SHOP_ID', 'PUBLIC_CUSTOMER_ACCOUNT_API_CLIENT_ID', 'SESSION_SECRET']) {
       const env = { ...ENV, [name]: undefined };

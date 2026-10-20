@@ -26,9 +26,14 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
   locals.buyer = prepared.buyer;
   const sessionManager = prepared.sessionManager!;
   locals.shopifySession = sessionManager;
-  if (prepared.customerAccount) {
+  if (prepared.customerSession) {
     locals.customerSession = prepared.customerSession;
-    locals.customerAccount = prepared.customerAccount;
+    // Lazy, like `prepared.customerAccount`: creating the client validates the request origin.
+    Object.defineProperty(locals, 'customerAccount', {
+      enumerable: true,
+      configurable: true,
+      get: () => prepared.customerAccount,
+    });
   }
 
   const shopifyRoute = await matchShopifyRoute(context.request, prepared);
@@ -55,6 +60,11 @@ function finalizeResponse(
       new Headers(sessionHeaders).forEach((value, key) => target.headers.append(key, value));
     }
     requestContext.applyResponseHeaders(target.headers);
+    // Hydrogen makes personalized responses private, but Oxygen's full-page cache reads its own
+    // header, which Hydrogen leaves alone. Never let a private response into that cache.
+    if (/\b(private|no-store)\b/i.test(target.headers.get('cache-control') ?? '')) {
+      target.headers.delete('oxygen-cache-control');
+    }
     return target;
   };
 

@@ -100,17 +100,24 @@ export async function prepareHydrogenRequest({ request, url, runtime, isPrerende
   ]);
   const handlers = typeof config.handlers === 'function' ? await config.handlers({ ...args, defaults }) : (config.handlers ?? defaults);
 
-  return {
+  const prepared: HydrogenRequest = {
     storefront,
     requestContext,
     buyer,
     sessionManager,
     customerSession: customerAccount?.customerSession,
-    customerAccount: customerAccount
-      ? createCustomerAccountClient({ shopId: customerAccount.shopId, requestContext })
-      : undefined,
     handlers,
   };
+  if (customerAccount) {
+    // Created on first use: Hydrogen rejects non-HTTPS origins (other than localhost) when the
+    // client is created, which must not take down pages that never query customer data.
+    let client: HydrogenLocals['customerAccount'];
+    Object.defineProperty(prepared, 'customerAccount', {
+      enumerable: true,
+      get: () => (client ??= createCustomerAccountClient({ shopId: customerAccount.shopId, requestContext })),
+    });
+  }
+  return prepared;
 }
 
 /**

@@ -1,8 +1,8 @@
 # Integration fixtures
 
 Small Astro projects that the tests in `test/integration/` build and run in the real Workers runtime
-(MiniOxygen/workerd). Run them with `npm run build && node --test 'test/integration/**/*.test.js'`
-from `packages/astro-hydrogen`.
+(MiniOxygen/workerd). Run them with `npm run test:integration` from `packages/astro-hydrogen` or the
+repo root (it compiles the adapter first).
 
 Each fixture has a `package.json` (`{ "private": true, "type": "module" }`), an `astro.config.mjs` that
 imports `astro-hydrogen`, `src/pages/`, and optionally `src/hydrogen.config.ts`. There is no per-fixture
@@ -19,7 +19,8 @@ exits).
 | `features` | Actions, `astro:env`, `Astro.session`, a Preact island, i18n routing |
 | `node-import` | a static `node:` import must fail the build |
 | `shopify-scripts` | `<ShopifyScripts />` |
-| `prerendered-404` | a prerendered `404.astro` next to Hydrogen routes (documents a known gap) |
+| `prerendered-404` | a prerendered `404.astro` next to Hydrogen routes: the Worker entry still serves `/api/cart` and `/admin`, in the build and under `astro dev` |
+| `integrations-only` | the config `astro add` writes (`integrations: [hydrogen()]`, no `adapter`) |
 
 ## Writing a test
 

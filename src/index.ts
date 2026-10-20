@@ -84,11 +84,19 @@ export default function hydrogen(options: HydrogenAdapterOptions = {}): AstroInt
   let astroConfig: AstroConfig;
   const routes: RouteState = { prerendered404: false };
 
-  return {
+  const integration: AstroIntegration = {
     name: NAME,
     hooks: {
       'astro:config:setup': ({ command, config, updateConfig, addMiddleware, addWatchFile, logger }) => {
         const root = fileURLToPath(config.root);
+
+        // `astro add astro-hydrogen` writes `integrations: [hydrogen()]` rather than `adapter:`.
+        // `setAdapter()` alone is not enough then: Astro's "no adapter installed" check for
+        // on-demand pages reads `config.adapter`, so register there as well.
+        if (!config.adapter) {
+          updateConfig({ adapter: integration });
+          logger.info('Registered as the adapter. Prefer `adapter: hydrogen()` in astro.config, with `output: "server"` for SSR by default.');
+        }
 
         const mode = config.vite?.mode ?? (command === 'dev' ? 'development' : 'production');
         if (command === 'build') loadDotEnvIntoProcess(root, mode);
@@ -126,9 +134,16 @@ export default function hydrogen(options: HydrogenAdapterOptions = {}): AstroInt
         ];
         if (command === 'dev') plugins.push(miniOxygenDevPlugins(miniOxygen, compatibilityDate));
 
+        // Sharp can't run in a Worker, but prerendering runs in Node. Astro 7.4+ splits the image
+        // service into `build` and `runtime`, so Sharp stays for prerendered pages and on-demand pages
+        // get the passthrough service. Older shapes get passthrough everywhere.
         const imageService = config.image.service;
         const runtimeImageService = 'runtime' in imageService ? imageService.runtime : imageService;
         const usesDefaultImageService = runtimeImageService.entrypoint === 'astro/assets/services/sharp';
+        const workerImageService =
+          'runtime' in imageService
+            ? { build: imageService.build, runtime: passthroughImageService() }
+            : passthroughImageService();
         updateConfig({
           build: {
             // Oxygen expects `index.js` at the root of the Worker directory.
@@ -136,8 +151,7 @@ export default function hydrogen(options: HydrogenAdapterOptions = {}): AstroInt
             ...(assetBaseUrl && !config.build.assetsPrefix && { assetsPrefix: assetBaseUrl.replace(/\/+$/, '') }),
           },
           image: {
-            // Sharp can't run in a Worker. Shopify's CDN resizes product images by URL instead.
-            ...(usesDefaultImageService && { service: passthroughImageService() }),
+            ...(usesDefaultImageService && { service: workerImageService }),
             // Astro's dev image endpoint reads files with `node:fs`; the generic one, used in
             // production, fetches them, which also works in workerd.
             ...(command === 'dev' &&
@@ -202,6 +216,7 @@ export default function hydrogen(options: HydrogenAdapterOptions = {}): AstroInt
       },
     },
   };
+  return integration;
 
   function relativeToRoot(url: URL): string {
     const path = fileURLToPath(url).slice(fileURLToPath(astroConfig.root).length).replace(/\/+$/, '');
