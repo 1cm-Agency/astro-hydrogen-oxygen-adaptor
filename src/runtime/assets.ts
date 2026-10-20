@@ -8,21 +8,24 @@ export function isStaticAssetSubrequest(request: Request): boolean {
 /**
  * Fetches a prerendered HTML file from the deployment's client assets.
  *
- * With `assetBaseUrl` (set by `shopify hydrogen deploy` at build time) files come straight from
- * Oxygen's CDN. Without it, such as in `astro preview`, they are requested from the storefront
- * origin, where `.html` paths are served from the assets directory.
+ * `pathname` is relative to Astro's `base` (use `app.removeBase()`). With `assetBaseUrl` (set by
+ * `shopify hydrogen deploy` at build time) files come straight from Oxygen's CDN, whose root is the
+ * client directory, so the base is not part of the URL. Without it, such as in `astro preview`,
+ * they are requested from the storefront origin, which serves the client directory under `base`.
  */
 export async function fetchPrerenderedPage(
   request: Request,
   pathname: string,
-  assetBaseUrl: string | undefined,
+  { assetBaseUrl, base }: { assetBaseUrl?: string; base?: string },
 ): Promise<Response | undefined> {
   if (request.method !== 'GET' && request.method !== 'HEAD') return undefined;
+
+  const originPrefix = (base ?? '').replace(/\/+$/, '');
 
   for (const candidate of htmlCandidates(pathname)) {
     const url = assetBaseUrl
       ? new URL(candidate.replace(/^\/+/, ''), assetBaseUrl.endsWith('/') ? assetBaseUrl : `${assetBaseUrl}/`)
-      : new URL(candidate, request.url);
+      : new URL(`${originPrefix}${candidate}`, request.url);
 
     const response = await fetch(url, {
       headers: { [SUBREQUEST_HEADER]: '1', accept: 'text/html' },

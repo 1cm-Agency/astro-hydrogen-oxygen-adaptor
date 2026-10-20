@@ -15,8 +15,12 @@ import {
   type ShopifyRouteHandlerGroup,
 } from '@shopify/hydrogen';
 import type { MiddlewareHandler } from 'astro';
+import { createCustomerAccountClient } from '@shopify/hydrogen/customer-account';
 import type { HydrogenLocals, HydrogenRequestArgs, OxygenEnv } from '../config.js';
+import { createCookieSessionManager } from '../runtime/cookie-session.js';
+import { getCustomerAccountSetup, MISSING } from '../runtime/customer-account.js';
 import { getOxygenBuyer } from '../runtime/buyer.js';
+import { getClientIp } from '../runtime/client-ip.js';
 import { getMemoryCache } from '../runtime/memory-cache.js';
 import { createRequestSessionManager } from '../runtime/session.js';
 import { createDefaultStorefrontClient } from '../runtime/storefront.js';
@@ -26,6 +30,7 @@ const DEFAULT_I18N: I18nConfig = { country: 'US', language: 'EN' };
 
 const routeTemplates = customRouteTemplates ?? createShopifyRouteTemplates({});
 let defaultHandlers: readonly ShopifyRouteHandlerGroup[] | undefined;
+const customerAccountEnabled = Boolean(config.customerAccount);
 
 export const onRequest: MiddlewareHandler = async (context, next) => {
   const locals = context.locals as HydrogenLocals;
@@ -66,10 +71,27 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
 
   locals.buyer = getOxygenBuyer(context.request.headers, buyerIp);
 
+  const secret = typeof args.env.SESSION_SECRET === 'string' ? args.env.SESSION_SECRET : '';
+  if (customerAccountEnabled && !config.sessionManager && !secret) throw new Error(MISSING('SESSION_SECRET'));
   const sessionManager = config.sessionManager
     ? await config.sessionManager(args)
-    : createRequestSessionManager(context.request);
+    : secret
+      ? createCookieSessionManager({ request: context.request, secret })
+      : createRequestSessionManager(context.request);
   locals.shopifySession = sessionManager;
+
+  const customerAccount = config.customerAccount
+    ? getCustomerAccountSetup(args.env, config.customerAccount)
+    : undefined;
+  if (customerAccount) {
+    locals.customerSession = customerAccount.customerSession;
+    locals.customerAccount = createCustomerAccountClient({ shopId: customerAccount.shopId, requestContext });
+  }
+  const defaults = customerAccount?.handlers ?? (defaultHandlers ??= [
+    createCartServerHandlers(),
+    createPredictiveSearchServerHandlers(),
+  ]);
+  const handlers = typeof config.handlers === 'function' ? await config.handlers({ ...args, defaults }) : (config.handlers ?? defaults);
 
   if (config.shopifyRoutes !== false) {
     const shopifyRoute = handleShopifyRoutes({
@@ -78,10 +100,7 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
       sessionManager,
       storefrontClient: storefront,
       routeTemplates,
-      handlers: config.handlers ?? (defaultHandlers ??= [
-        createCartServerHandlers(),
-        createPredictiveSearchServerHandlers(),
-      ]),
+      handlers,
     });
     // Matched Shopify responses already carry the request context's headers.
     if (shopifyRoute) return shopifyRoute;
@@ -102,7 +121,7 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
 };
 
 function defaultGetBuyerIp({ request }: HydrogenRequestArgs): string | undefined {
-  return request.headers.get('oxygen-buyer-ip')?.split(',')[0]?.trim() || undefined;
+  return getClientIp(request.headers.get('oxygen-buyer-ip'));
 }
 
 /** Commit session headers first, then let Hydrogen apply SFAPI cookies and cache safety. */

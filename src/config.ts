@@ -7,6 +7,7 @@ import type {
   ShopifyRouteTemplates,
   StorefrontClient,
 } from '@shopify/hydrogen';
+import type { CustomerAccountClient, CustomerSession } from '@shopify/hydrogen/customer-account';
 
 /**
  * Environment variables and secrets for the current request.
@@ -22,7 +23,12 @@ export interface OxygenEnv {
   PRIVATE_STOREFRONT_API_TOKEN?: string;
   PUBLIC_STOREFRONT_ID?: string;
   PUBLIC_CHECKOUT_DOMAIN?: string;
+  /** Encrypts the session cookie. Oxygen injects it for a linked storefront. */
   SESSION_SECRET?: string;
+  /** Customer Account API OAuth client ID. Needed by `customerAccount`. */
+  PUBLIC_CUSTOMER_ACCOUNT_API_CLIENT_ID?: string;
+  /** Base URL for Shopify's OAuth endpoints. Defaults to `https://shopify.com/authentication/{SHOP_ID}`. */
+  PUBLIC_CUSTOMER_ACCOUNT_API_URL?: string;
   /** The shop's ID, which `<ShopifyScripts />` needs for analytics. */
   SHOP_ID?: string;
   [key: string]: unknown;
@@ -50,6 +56,18 @@ export interface HydrogenLocals {
   shopifyRequestContext: ShopifyRequestContext;
   /** The session Hydrogen route handlers use. Undefined while prerendering. */
   shopifySession?: HydrogenSessionManager;
+  /**
+   * The customer session behind the `/account/*` routes: `isLoggedIn`, `getOrRefreshAccessToken`,
+   * `logout`. Pass it `Astro.locals.shopifySession` and `Astro.locals.shopifyRequestContext`.
+   * Undefined unless `customerAccount` is enabled, and while prerendering.
+   */
+  customerSession?: CustomerSession;
+  /**
+   * Customer Account API client for this request. Query it with an access token from
+   * `customerSession.getOrRefreshAccessToken()`. Undefined unless `customerAccount` is enabled,
+   * and while prerendering.
+   */
+  customerAccount?: CustomerAccountClient;
   /** Where the buyer is, from Oxygen's `oxygen-buyer-*` headers. Undefined while prerendering. */
   buyer?: OxygenBuyer;
 }
@@ -77,7 +95,14 @@ export interface OxygenBuyer {
   timezone?: string;
   /** Nielsen DMA code, US only. */
   metroCode?: string;
+  /** True when Oxygen sends any non-empty `oxygen-buyer-is-eu-country` value. */
   isEuCountry: boolean;
+  /** From `oxygen-buyer-shop-id`. Undocumented but sent on every request; MiniOxygen sends `development`. */
+  shopId?: string;
+  /** From `oxygen-buyer-storefront-id`. Undocumented; MiniOxygen sends `development`. */
+  storefrontId?: string;
+  /** From `oxygen-buyer-deployment-id`. Undocumented; MiniOxygen sends `local`. */
+  deploymentId?: string;
 }
 
 /** The session storage Hydrogen route handlers read and write. */
@@ -130,15 +155,31 @@ export interface HydrogenConfig {
   /**
    * Request-scoped session storage for Hydrogen route handlers (required for Customer Account
    * handlers). Its `commit()` headers are appended to every response.
-   * @default an in-memory, per-request session
+   * @default an encrypted cookie session (`createCookieSessionManager`) when `SESSION_SECRET` is
+   * set, otherwise an in-memory, per-request session
    */
   sessionManager?: (args: HydrogenRequestArgs) => HydrogenSessionManager | Promise<HydrogenSessionManager>;
 
   /**
-   * Hydrogen route handler groups served before Astro routing.
-   * @default cart (`/api/cart`) and predictive search (`/api/predictive-search`) handlers
+   * Shopify Customer Account login: serves `/account/login`, `/account/authorize`,
+   * `/account/refresh` and `POST /account/logout`, and sets `Astro.locals.customerSession` and
+   * `Astro.locals.customerAccount`. Needs `SHOP_ID`, `PUBLIC_CUSTOMER_ACCOUNT_API_CLIENT_ID` and
+   * `SESSION_SECRET` (run `shopify hydrogen env pull`), and an HTTPS origin.
+   * @default false
    */
-  handlers?: readonly ShopifyRouteHandlerGroup[];
+  customerAccount?: boolean | CustomerAccountOptions;
+
+  /**
+   * Hydrogen route handler groups served before Astro routing. Pass a function to extend the
+   * defaults instead of replacing them; it receives them as `defaults`.
+   * @default cart (`/api/cart`) and predictive search (`/api/predictive-search`) handlers, plus
+   * the customer account handlers when `customerAccount` is enabled
+   */
+  handlers?:
+    | readonly ShopifyRouteHandlerGroup[]
+    | ((
+        args: HydrogenRequestArgs & { defaults: readonly ShopifyRouteHandlerGroup[] },
+      ) => readonly ShopifyRouteHandlerGroup[] | Promise<readonly ShopifyRouteHandlerGroup[]>);
 
   /**
    * The app's non-standard Shopify resource paths, shared by route handling and redirects.
@@ -159,6 +200,23 @@ export interface HydrogenConfig {
    * @default true
    */
   shopifyRedirects?: boolean;
+}
+
+/** Options for the `customerAccount` config. */
+export interface CustomerAccountOptions {
+  /**
+   * Keep the cart's buyer identity in step with the signed-in customer, so checkout is logged in.
+   * @default true
+   */
+  cartSync?: boolean;
+  /** Where to send the customer after sign-in when the login request has no `return_to`. @default '/' */
+  defaultPostLoginRedirectPathname?: string;
+  /** Same-origin path to redirect to when sign-in fails. @default '/account?login=failed' */
+  loginFailedRedirectPath?: string;
+  /** Where to send the customer after logout. @default '/' */
+  postLogoutRedirectUri?: string;
+  /** The storefront's public HTTPS origin, or a function of the request. @default the request origin */
+  origin?: string | ((request: Request) => string);
 }
 
 /** Type helper for `src/hydrogen.config.ts`. */

@@ -9,11 +9,14 @@ const STRING_HEADERS = {
   continent: 'oxygen-buyer-continent',
   timezone: 'oxygen-buyer-timezone',
   metroCode: 'oxygen-buyer-metro-code',
+  shopId: 'oxygen-buyer-shop-id',
+  storefrontId: 'oxygen-buyer-storefront-id',
+  deploymentId: 'oxygen-buyer-deployment-id',
 } as const;
 
 /** Reads Oxygen's geolocation headers. `ip` comes from the adapter's buyer IP resolution. */
 export function getOxygenBuyer(headers: Headers, ip: string | undefined): OxygenBuyer {
-  const buyer: OxygenBuyer = { isEuCountry: isTrue(headers.get('oxygen-buyer-is-eu-country')) };
+  const buyer: OxygenBuyer = { isEuCountry: isEuCountry(headers.get('oxygen-buyer-is-eu-country')) };
   if (ip) buyer.ip = ip;
   for (const [key, header] of Object.entries(STRING_HEADERS) as [keyof typeof STRING_HEADERS, string][]) {
     const value = headers.get(header)?.trim();
@@ -26,8 +29,9 @@ export function getOxygenBuyer(headers: Headers, ip: string | undefined): Oxygen
   return buyer;
 }
 
-function isTrue(value: string | null): boolean {
-  return value === 'true' || value === '1';
+/** Oxygen documents any non-empty value as "in the EU"; absent or empty means not. */
+function isEuCountry(value: string | null): boolean {
+  return !!value?.trim();
 }
 
 function toNumber(value: string | null): number | undefined {

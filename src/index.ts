@@ -47,7 +47,7 @@ export interface HydrogenAdapterOptions {
   compatibilityDate?: string;
   /** Options for the MiniOxygen runtime that runs `astro dev` and `astro preview`. */
   miniOxygen?: {
-    /** Extra environment bindings. When set, `.env` files are not loaded automatically. */
+    /** Extra environment bindings, merged over the values from `.env` files; these win. */
     env?: Record<string, string>;
     /** Port for the Worker inspector (Chrome DevTools). */
     inspectorPort?: number;
@@ -66,6 +66,9 @@ const DEFAULT_COMPATIBILITY_DATE = '2026-04-01';
 const CONFIG_FILE_CANDIDATES = ['ts', 'mts', 'js', 'mjs'].map((ext) => `src/hydrogen.config.${ext}`);
 const VIRTUAL_CONFIG = 'virtual:astro-hydrogen/config';
 const VIRTUAL_OPTIONS = 'virtual:astro-hydrogen/options';
+// Oxygen has no `process` global, and some dependencies read `process.env.X` or
+// `process.platform` while their module evaluates. Only `process.env.NODE_ENV` is replaced at build time.
+const PROCESS_SHIM = 'globalThis.process ??= {}; globalThis.process.env ??= {};';
 const WORKER_CONDITIONS = ['worker', 'workerd', 'module', 'browser', 'development|production'];
 
 /**
@@ -110,8 +113,9 @@ export default function hydrogen(options: HydrogenAdapterOptions = {}): AstroInt
         if (configFile) addWatchFile(configFile);
 
         const plugins: PluginOption[] = [
-          virtualModulesPlugin({ configFile, cacheName: options.cacheName ?? 'hydrogen', assetBaseUrl }),
+          virtualModulesPlugin({ configFile, cacheName: options.cacheName ?? 'hydrogen', assetBaseUrl, base: config.base }),
           oxygenWorkerPlugin(root),
+          singleHydrogenBuildPlugin(root),
         ];
         if (command === 'dev') plugins.push(miniOxygenDevPlugins(miniOxygen, compatibilityDate));
 
@@ -228,6 +232,7 @@ function virtualModulesPlugin(values: {
   configFile: string | undefined;
   cacheName: string;
   assetBaseUrl: string | undefined;
+  base: string;
 }): Plugin {
   const resolved = (id: string) => `\0${id}`;
   return {
@@ -244,6 +249,7 @@ function virtualModulesPlugin(values: {
       if (id === resolved(VIRTUAL_OPTIONS)) {
         return [
           `export const cacheName = ${JSON.stringify(values.cacheName)};`,
+          `export const base = ${JSON.stringify(values.base.replace(/\/+$/, ''))};`,
           `export const assetBaseUrl = ${JSON.stringify(values.assetBaseUrl)};`,
         ].join('\n');
       }
@@ -296,6 +302,31 @@ function oxygenWorkerPlugin(root: string): Plugin {
 }
 
 /**
+ * `@shopify/hydrogen`'s main export has a `development` condition, but its sub-paths such as
+ * `./customer-account` do not. In `astro dev`, Vite's `development` condition would therefore load
+ * two copies of Hydrogen's core on the server, and `createCustomerAccountServerHandlers` would not
+ * recognise cart handlers created by the other copy. Resolve the main entry the way Node does,
+ * without the `development` condition, so the server runs one build of Hydrogen.
+ */
+function singleHydrogenBuildPlugin(root: string): Plugin {
+  const require = createRequire(join(root, 'package.json'));
+  return {
+    name: `${NAME}:single-hydrogen-build`,
+    apply: 'serve',
+    enforce: 'pre',
+    applyToEnvironment: (environment) => environment.name === 'ssr',
+    resolveId(id) {
+      if (id !== '@shopify/hydrogen') return;
+      try {
+        return require.resolve(id);
+      } catch {
+        return;
+      }
+    },
+  };
+}
+
+/**
  * Oxygen runs one Worker module. Astro's SSR build emits an entry plus chunks (and post-processes
  * them), so once it is done, inline the chunks into `index.js` and remove them.
  */
@@ -310,7 +341,7 @@ async function bundleWorker(workerDir: URL) {
     external: [/^cloudflare:/],
     logLevel: 'warn',
     plugins: [nodeBuiltinsPlugin(staticNodeImports)],
-    output: { file: bundled, format: 'esm', codeSplitting: false },
+    output: { file: bundled, format: 'esm', codeSplitting: false, banner: PROCESS_SHIM },
   });
   if (staticNodeImports.size > 0) {
     await rm(bundled, { force: true });

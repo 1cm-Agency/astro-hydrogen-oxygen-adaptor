@@ -81,7 +81,9 @@ Hydrogen fills in `$country` and `$language` from the request's market. Results 
 | --- | --- |
 | `storefront` | The request-scoped Storefront API client. |
 | `shopifyRequestContext` | Hydrogen's request context: `i18n`, cookies, and response headers. |
-| `shopifySession` | The session Hydrogen route handlers use. Undefined while prerendering. |
+| `shopifySession` | The session Hydrogen route handlers use: an encrypted cookie session when `SESSION_SECRET` is set. Undefined while prerendering. |
+| `customerSession` | Hydrogen's `CustomerSession` (`isLoggedIn`, `getOrRefreshAccessToken`, ...). Only with `customerAccount` enabled; undefined while prerendering. |
+| `customerAccount` | A Customer Account API client for the request. Only with `customerAccount` enabled; undefined while prerendering. |
 | `oxygen` | `{ env, cache, waitUntil }` from the Oxygen Worker. Undefined while prerendering. |
 | `buyer` | The buyer's location from Oxygen's headers: `country`, `region`, `regionCode`, `city`, `postalCode`, `continent`, `latitude`, `longitude`, `timezone`, `metroCode`, `isEuCountry` and `ip`. Undefined while prerendering. |
 
@@ -176,16 +178,44 @@ export default defineHydrogenConfig({
   // Only if you serve Shopify resources at non-standard paths.
   routeTemplates: createShopifyRouteTemplates({ product: '/p/:productHandle' }),
 
-  // Replaces the default cart + predictive search handler groups.
+  // Replaces the default cart + predictive search handler groups. Pass a function to extend
+  // them: handlers: ({ defaults }) => [...defaults, myHandlers],
   handlers: [createCartServerHandlers()],
 
-  // Required for Customer Account handlers: a persistent, cookie-backed session.
+  // Customer Account login (see below).
+  // customerAccount: true,
+
+  // Replaces the default session (an encrypted cookie when SESSION_SECRET is set).
   // sessionManager: ({ request, env }) => createMySession(request, env.SESSION_SECRET),
 
   // Full control over the client (pass `cache` and `waitUntil` for sub-request caching).
   // storefront: ({ requestContext, env, cache, waitUntil }) => createStorefrontClient({ ... }),
 });
 ```
+
+### Sessions and Customer Account login
+
+Hydrogen ships no persistent session, so the adapter does. When `SESSION_SECRET` is set (Oxygen injects it; `shopify hydrogen env pull` writes it locally), `Astro.locals.shopifySession` is stored in one cookie, `__Host-session` over HTTPS and `session` over plain HTTP. The cookie is HttpOnly, `SameSite=Lax`, and encrypted and authenticated with AES-GCM (key derived from `SESSION_SECRET`), because it holds customer tokens. A tampered, expired or wrongly keyed cookie reads as an empty session. Keep it under about 4 KB; the adapter warns once if it grows past that. Without `SESSION_SECRET` the session lasts one request. This is separate from `Astro.session`. For other behaviour, `createCookieSessionManager` is exported from `astro-hydrogen/runtime/cookie-session`.
+
+Enable login with one option:
+
+```ts
+export default defineHydrogenConfig({ customerAccount: true });
+```
+
+This serves `/account/login`, `/account/authorize`, `/account/refresh` and `POST /account/logout` (log out with a `<form method="post" action="/account/logout">`), and keeps the cart's buyer identity in sync. Pass `{ cartSync: false, defaultPostLoginRedirectPathname, loginFailedRedirectPath, postLogoutRedirectUri, origin }` to tune it. It needs `SHOP_ID`, `PUBLIC_CUSTOMER_ACCOUNT_API_CLIENT_ID` and `SESSION_SECRET`; a request fails with an error naming any that is missing (run `shopify hydrogen env pull`). Shopify's OAuth requires a public HTTPS origin, so locally use a tunnel and register its callback URL (`https://<tunnel>/account/authorize`) in the Customer Account API settings. Link to the routes with plain `<a>` or `<form>`.
+
+```astro
+---
+const { customerSession, customerAccount, shopifySession, shopifyRequestContext } = Astro.locals;
+const token = await customerSession?.getOrRefreshAccessToken(shopifySession, shopifyRequestContext);
+---
+{token ? <form method="post" action="/account/logout"><button>Log out</button></form> : <a href="/account/login">Log in</a>}
+```
+
+Calling `getOrRefreshAccessToken` may rewrite tokens; the middleware commits the session cookie for framework-rendered responses, but streamed responses that have already started cannot set it.
+
+If you set `handlers` to an array, the adapter's defaults (including the customer account routes) are not added; use the function form, `handlers: ({ defaults }) => [...defaults, mine]`, to keep them.
 
 ## Deploy to Oxygen
 

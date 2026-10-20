@@ -18,6 +18,9 @@ describe('getOxygenBuyer', () => {
         'oxygen-buyer-timezone': 'America/Los_Angeles',
         'oxygen-buyer-metro-code': '807',
         'oxygen-buyer-is-eu-country': '',
+        'oxygen-buyer-shop-id': '1',
+        'oxygen-buyer-storefront-id': '2',
+        'oxygen-buyer-deployment-id': 'local',
       }),
       '203.0.113.7',
     );
@@ -33,8 +36,21 @@ describe('getOxygenBuyer', () => {
       longitude: -122.4014,
       timezone: 'America/Los_Angeles',
       metroCode: '807',
+      shopId: '1',
+      storefrontId: '2',
+      deploymentId: 'local',
       isEuCountry: false,
     });
+  });
+
+  it('treats any non-empty is-eu-country value as EU', () => {
+    const eu = (value) => getOxygenBuyer(new Headers(value === null ? {} : { 'oxygen-buyer-is-eu-country': value }), undefined).isEuCountry;
+    assert.equal(eu('true'), true);
+    assert.equal(eu('1'), true);
+    assert.equal(eu('yes'), true);
+    assert.equal(eu('  '), false);
+    assert.equal(eu(''), false);
+    assert.equal(eu(null), false);
   });
 
   it('leaves out missing or malformed values', () => {

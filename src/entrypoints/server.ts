@@ -4,8 +4,9 @@
  */
 import { createApp } from 'astro/app/entrypoint';
 import { setGetEnv } from 'astro/env/setup';
-import { assetBaseUrl, cacheName } from 'virtual:astro-hydrogen/options';
+import { assetBaseUrl, base, cacheName } from 'virtual:astro-hydrogen/options';
 import type { OxygenEnv, OxygenRuntime } from '../config.js';
+import { getClientIp } from '../runtime/client-ip.js';
 import { fetchPrerenderedPage, isStaticAssetSubrequest } from '../runtime/assets.js';
 
 interface ExecutionContext {
@@ -36,7 +37,10 @@ export default {
         // Prerendered pages live with the client assets on Oxygen's CDN, which only serves
         // paths with a file extension at the storefront origin. Serve extensionless page URLs here.
         if (!routeData && !isStaticAssetSubrequest(request) && app.match(request, true)?.prerender) {
-          const page = await fetchPrerenderedPage(request, app.removeBase(new URL(request.url).pathname), assetBaseUrl);
+          const page = await fetchPrerenderedPage(request, app.removeBase(new URL(request.url).pathname), {
+            assetBaseUrl,
+            base,
+          });
           if (page) return page;
         }
       }
@@ -46,11 +50,12 @@ export default {
         locals: { oxygen },
         waitUntil,
         addCookieHeader: true,
-        clientAddress: request.headers.get('oxygen-buyer-ip') ?? undefined,
+        clientAddress: getClientIp(request.headers.get('oxygen-buyer-ip')),
         prerenderedErrorPageFetch: async (url) => {
-          const pathname = new URL(url, request.url).pathname;
+          // Astro's error page URL includes `base`; the page lookup wants it stripped.
+          const pathname = app.removeBase(new URL(url, request.url).pathname);
           return (
-            (await fetchPrerenderedPage(request, pathname, assetBaseUrl)) ??
+            (await fetchPrerenderedPage(request, pathname, { assetBaseUrl, base })) ??
             new Response('Not found', { status: 404 })
           );
         },

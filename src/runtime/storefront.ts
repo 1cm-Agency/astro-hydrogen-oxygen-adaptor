@@ -23,14 +23,15 @@ export function createDefaultStorefrontClient({
 }: HydrogenStorefrontArgs): HydrogenStorefrontClient {
   const storeDomain = readString(env, 'PUBLIC_STORE_DOMAIN') ?? useMockShop();
   const privateStorefrontToken = readString(env, 'PRIVATE_STOREFRONT_API_TOKEN');
-  const caching = { cache, waitUntil };
+  // Shared by every client type: the storefront ID header and sub-request caching.
+  const shared = { storefrontId: readString(env, 'PUBLIC_STOREFRONT_ID'), cache, waitUntil };
 
   if (privateStorefrontToken && buyerIp) {
     return createStorefrontClient({
       type: 'private',
       // The middleware creates the context with `buyerIp` whenever one is available.
       requestContext: requestContext as ShopifyRequestContextWithBuyerIp,
-      config: { storeDomain, privateStorefrontToken, ...caching },
+      config: { storeDomain, privateStorefrontToken, ...shared },
     });
   }
 
@@ -38,7 +39,7 @@ export function createDefaultStorefrontClient({
     return createStorefrontClient({
       type: 'private_no_buyer_context',
       requestContext,
-      config: { storeDomain, privateStorefrontToken, ...caching },
+      config: { storeDomain, privateStorefrontToken, ...shared },
     });
   }
 
@@ -48,7 +49,7 @@ export function createDefaultStorefrontClient({
     config: {
       storeDomain,
       publicStorefrontToken: readString(env, 'PUBLIC_STOREFRONT_API_TOKEN'),
-      ...caching,
+      ...shared,
     },
   });
 }
