@@ -41,6 +41,7 @@ These corrections were made while preparing the first release.
 - The server directory contains only `index.js`, its source map if any, and `oxygen.json`. Chunks that were inlined into the Worker, or that tree-shaking left unreferenced, are removed because Oxygen uploads only the entry file. This also works when the server directory is reached through a symlink.
 - With a prerendered `404.astro`, URLs that match no route no longer skip Hydrogen: `/api/cart`, `/checkout`, `/admin` and store redirects work in the deployed Worker and in `astro dev`, and the 404 page is still served for everything else.
 - A dependency that reads `process.env` or `process.platform` while its module loads no longer crashes the production Worker.
+- The Worker bundle resolves Astro's own dependencies (`cookie`, `clsx`, `devalue`, ...) from Astro's package. Before, a project whose `node_modules` hoisted another major of one of them, such as the `cookie` 0.x that Express and Miniflare dependencies bring, failed the build with `Named export 'parseCookie' not found`.
 
 ### Known limitations
 

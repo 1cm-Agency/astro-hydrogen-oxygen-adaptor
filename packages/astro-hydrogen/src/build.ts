@@ -172,13 +172,14 @@ export async function bundleWorker(workerDir: URL) {
   const entry = fileURLToPath(new URL('index.js', workerDir));
   const bundled = fileURLToPath(new URL('index.bundled.js', workerDir));
 
+  const workerDirPath = await realpath(fileURLToPath(workerDir));
   const staticNodeImports = new Set<string>();
   const output = await rolldownBuild({
     input: entry,
     platform: 'neutral',
     external: [/^cloudflare:/],
     logLevel: 'warn',
-    plugins: [nodeBuiltinsPlugin(staticNodeImports)],
+    plugins: [nodeBuiltinsPlugin(staticNodeImports), astroDependenciesPlugin([workerDirPath, fileURLToPath(workerDir)])],
     output: { file: bundled, format: 'esm', codeSplitting: false, banner: PROCESS_SHIM },
   });
   if (staticNodeImports.size > 0) {
@@ -192,10 +193,45 @@ export async function bundleWorker(workerDir: URL) {
   await rename(bundled, entry);
   // Oxygen uploads only `index.js` (and its source map) from the worker dir, so whatever else is
   // there is a chunk that is now inlined, or one that tree-shaking left unreferenced.
-  const workerDirPath = await realpath(fileURLToPath(workerDir));
   for (const name of await readdir(workerDirPath)) {
     if (name !== 'index.js' && name !== 'index.js.map') await rm(join(workerDirPath, name), { recursive: true, force: true });
   }
+}
+
+/**
+ * Astro's server build leaves Astro's own dependencies as bare imports in the emitted chunks
+ * (`cookie`, `clsx`, `devalue`, ...). Bundling from the chunk's location resolves them from the
+ * project's `node_modules`, which is the wrong copy whenever npm hoisted another major of the same
+ * package there (an old `cookie` from an Express or Miniflare dependency, for example) and nested
+ * Astro's copy under `node_modules/astro`. Resolve those imports from Astro's package instead, as
+ * Node would have for Astro's own source files.
+ */
+export function astroDependenciesPlugin(workerDirs: string[]): RolldownPlugin {
+  let astroPackage: string | undefined;
+  let astroDependencies = new Set<string>();
+  try {
+    astroPackage = createRequire(join(workerDirs[0], 'index.js')).resolve('astro/package.json');
+    const { dependencies = {} } = JSON.parse(readFileSync(astroPackage, 'utf8')) as { dependencies?: Record<string, string> };
+    astroDependencies = new Set(Object.keys(dependencies));
+  } catch {
+    // No Astro next to the worker dir (unit tests of the bundler): nothing to redirect.
+  }
+  return {
+    name: 'astro-hydrogen:astro-dependencies',
+    async resolveId(id, importer, options) {
+      if (!astroPackage || !importer || !workerDirs.some((dir) => importer.startsWith(dir))) return;
+      if (!astroDependencies.has(packageNameOf(id))) return;
+      const resolved = await this.resolve(id, astroPackage, { ...options, skipSelf: true });
+      return resolved ?? undefined;
+    },
+  };
+}
+
+/** `@scope/name/sub` -> `@scope/name`, `name/sub` -> `name`; '' for anything that is not a bare specifier. */
+export function packageNameOf(id: string): string {
+  if (id.startsWith('.') || id.startsWith('/') || id.startsWith('\0') || /^[a-z]+:/i.test(id)) return '';
+  const parts = id.split('/');
+  return id.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
 }
 
 // `import("node:x")`, including with `/* @vite-ignore */`-style comments, which Rolldown leaves alone.

@@ -328,6 +328,28 @@ describe('bundleWorker', () => {
     assert.ok(!(await readFile(join(root, 'real/index.js'), 'utf8')).includes('./chunks/'));
   });
 
+  it("resolves Astro's own dependencies from Astro's package, not from a conflicting hoisted copy", async () => {
+    const root = await tmp();
+    await put(root, {
+      // The project hoisted an old `cookie` (as Express or Miniflare dependencies do) and npm nested
+      // the one Astro needs. Astro's emitted chunk imports it bare, from dist/server.
+      'node_modules/cookie/package.json': '{ "name": "cookie", "version": "0.5.0", "main": "index.js" }',
+      'node_modules/cookie/index.js': 'exports.parse = () => "old-cookie";\n',
+      'node_modules/astro/package.json': '{ "name": "astro", "version": "7.0.0", "dependencies": { "cookie": "^2.0.1" } }',
+      'node_modules/astro/node_modules/cookie/package.json': '{ "name": "cookie", "version": "2.0.1", "type": "module", "exports": "./index.js" }',
+      'node_modules/astro/node_modules/cookie/index.js': 'export const parseCookie = () => "astro-cookie";\n',
+      // A package that is not an Astro dependency keeps resolving from the project.
+      'node_modules/other/package.json': '{ "name": "other", "version": "1.0.0", "type": "module", "exports": "./index.js" }',
+      'node_modules/other/index.js': 'export const other = "project-other";\n',
+      'dist/server/index.js': `import { parseCookie } from 'cookie';\nimport { other } from 'other';\nexport default { parseCookie, other };\n`,
+    });
+    await bundleWorker(pathToFileURL(join(root, 'dist/server') + '/'));
+    const code = await readFile(join(root, 'dist/server/index.js'), 'utf8');
+    assert.ok(code.includes('astro-cookie'), code);
+    assert.ok(!code.includes('old-cookie'));
+    assert.ok(code.includes('project-other'));
+  });
+
   it('keeps dynamic node: imports from failing the build by rejecting them at runtime', async () => {
     const root = await tmp();
     await put(root, { 'index.js': `export const load = () => import('node:stream');\n` });
