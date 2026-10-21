@@ -17,6 +17,7 @@ exits).
 | `hydrogen-config` | every `src/hydrogen.config.ts` hook |
 | `customer-account` | `customerAccount: true` login, logout and session errors |
 | `features` | Actions, `astro:env`, `Astro.session`, a Preact island, i18n routing |
+| `islands` | Solid and Svelte islands (`client:load`, `client:idle`, `client:visible`, `client:only`) on an on-demand page and a prerendered page, in the Worker and under `astro dev`; island modules served from the CDN |
 | `node-import` | a static `node:` import must fail the build |
 | `shopify-scripts` | `<ShopifyScripts />` |
 | `elements` | `<Money />`, `<ShopifyImage />`, `<ShopPayButton />` and `<PredictiveSearchForm />`, with an `/en-ca` market, a prerendered page and the Shop Pay link through the Hydrogen routes |

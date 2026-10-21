@@ -47,4 +47,4 @@ These corrections were made while preparing the first release.
 - No Node.js APIs in the Worker, a 10 MB Worker size limit, no KV or Durable Objects, and `Astro.session` has no driver until you configure an HTTP-reachable store.
 - Local images are not resized at runtime.
 - Customer Account login needs an HTTPS origin, so local development needs `localHttps` or a tunnel.
-- Astro fonts, i18n domains, live content collections and UI frameworks other than Preact, React and Vue are untested.
+- Astro fonts, i18n domains and UI frameworks other than Preact, Solid, Svelte, React and Vue are untested.

@@ -107,10 +107,14 @@
     "astro": "^7.0.0"
   },
   "devDependencies": {
+    "@astrojs/solid-js": "^7.1.0",
+    "@astrojs/svelte": "^9.1.0",
     "@shopify/hydrogen": "2026.10.1",
     "@shopify/oxygen-workers-types": "^4.2.0",
     "@types/node": "^22.10.6",
     "astro": "7.4.0",
+    "solid-js": "^1.9.17",
+    "svelte": "^5.57.2",
     "typescript": "^5.9.3",
     "vite": "^8.0.7"
   },

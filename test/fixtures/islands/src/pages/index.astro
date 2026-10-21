@@ -1,0 +1,19 @@
+---
+import SolidCounter from '../components/SolidCounter.tsx';
+import SolidBuyer from '../components/SolidBuyer.tsx';
+import SvelteCounter from '../components/SvelteCounter.svelte';
+import SvelteGreeting from '../components/SvelteGreeting.svelte';
+
+const country = Astro.locals.buyer?.country ?? 'none';
+---
+<html lang="en">
+  <head><title>islands</title></head>
+  <body>
+    <h1 id="title">islands-ssr</h1>
+    <p id="country">{country}</p>
+    <SolidCounter client:load label="solid" start={5} />
+    <SvelteCounter client:load label="svelte" start={7} />
+    <SvelteGreeting client:visible country={country} />
+    <SolidBuyer client:only="solid-js" country={country} />
+  </body>
+</html>

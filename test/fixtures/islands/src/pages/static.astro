@@ -1,0 +1,13 @@
+---
+export const prerender = true;
+import SolidCounter from '../components/SolidCounter.tsx';
+import SvelteCounter from '../components/SvelteCounter.svelte';
+---
+<html lang="en">
+  <head><title>islands static</title></head>
+  <body>
+    <h1 id="title">islands-prerendered</h1>
+    <SolidCounter client:load label="solid" />
+    <SvelteCounter client:load label="svelte" />
+  </body>
+</html>

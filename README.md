@@ -810,7 +810,7 @@ Deployments are immutable: each deploy uploads new code and assets under a new a
 | Fonts | Untested. |
 | Content collections | Supported for Shopify catalog data: build-time (`shopifyLoader`) and live (`shopifyLiveLoader`) loaders, both covered by a fixture against mock.shop; see [Content collections](#content-collections). Other loaders do not depend on the adapter. |
 
-UI frameworks: Preact is tested (playground and fixtures). React and Vue build, and rendered in the Worker and in dev when checked by hand. Svelte, Solid and others are untested.
+UI frameworks: Preact, Solid and Svelte are tested. Fixtures server-render their islands inside the Worker and under `astro dev`, with `client:load`, `client:idle`, `client:visible` and `client:only`, on both on-demand and prerendered pages, and hydration was checked in a browser against `astro preview`. The three can share one page: Solid and Svelte together add about 1 MB to the Worker. React and Vue build, and rendered in the Worker and in dev when checked by hand. Other frameworks are untested.
 
 In `astro dev` the server runs in workerd, which loads only ES modules. CommonJS packages that your server code imports must be pre-bundled, or the request fails with `module is not defined`. The adapter already does this for `react`, `react-dom` and Astro's `picomatch`; add others:
 
