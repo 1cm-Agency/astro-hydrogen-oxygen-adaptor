@@ -18,7 +18,7 @@ An [Astro](https://astro.build) adapter for [Shopify Oxygen](https://shopify.dev
 
 ## Quick start
 
-A complete storefront that runs against the mock.shop demo store with no configuration is in the repository's `examples/mock-shop` directory: product listing, product page with variant picker, cart, search and a prerendered page, all with the components below and no UI framework. To start from scratch instead:
+A complete storefront that runs against the mock.shop demo store with no configuration is in [`examples/mock-shop`](https://github.com/1cm-Agency/astro-hydrogen-oxygen-adaptor/tree/main/examples/mock-shop): product listing, product page with variant picker, cart, search and a prerendered page, all with the components below and no UI framework. To start from scratch instead:
 
 ```sh
 npm install astro-hydrogen @shopify/hydrogen

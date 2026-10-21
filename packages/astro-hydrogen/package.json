@@ -4,6 +4,15 @@
   "description": "Astro adapter for Shopify Hydrogen: deploy to Oxygen and get a request-scoped Storefront API client in every page, with no UI framework required.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/1cm-Agency/astro-hydrogen-oxygen-adaptor.git",
+    "directory": "packages/astro-hydrogen"
+  },
+  "homepage": "https://github.com/1cm-Agency/astro-hydrogen-oxygen-adaptor/tree/main/packages/astro-hydrogen#readme",
+  "bugs": {
+    "url": "https://github.com/1cm-Agency/astro-hydrogen-oxygen-adaptor/issues"
+  },
   "sideEffects": [
     "./dist/runtime/process-shim.js"
   ],
