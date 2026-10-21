@@ -1,0 +1,54 @@
+---
+import { gql } from '@shopify/hydrogen';
+import ProductCard from '../components/ProductCard.astro';
+import Layout from '../layouts/Layout.astro';
+
+// mock.shop supports `products(query:)` but ignores the filter (it returns the same default
+// catalog for any term), and its `search` and `predictiveSearch` return nothing. So the query
+// goes to the Storefront API as a real store would use it, and the results are narrowed again
+// here by title, type, vendor and tags. On a real store the second pass changes nothing.
+const QUERY = gql(`query Search($term: String!) {
+  products(first: 50, query: $term) {
+    nodes {
+      id
+      handle
+      title
+      productType
+      vendor
+      tags
+      featuredImage { url altText }
+      priceRange { minVariantPrice { amount currencyCode } }
+    }
+  }
+}`);
+
+const term = Astro.url.searchParams.get('q')?.trim() ?? '';
+const words = term.toLowerCase().split(/\s+/);
+const { data } = term ? await Astro.locals.storefront.graphql(QUERY, { variables: { term } }) : { data: null };
+const products = (data?.products.nodes ?? []).filter((product) => {
+  const haystack = [product.title, product.productType, product.vendor, ...product.tags].join(' ').toLowerCase();
+  return words.every((word) => haystack.includes(word));
+});
+---
+
+<Layout title={term ? `Search: ${term}` : 'Search'}>
+  <h1>Search</h1>
+  {
+    !term ? (
+      <p class="muted">Enter a search term in the box above.</p>
+    ) : products.length === 0 ? (
+      <p>No products match "{term}".</p>
+    ) : (
+      <>
+        <p class="muted">{products.length} result{products.length === 1 ? '' : 's'} for "{term}"</p>
+        <ul class="product-grid">
+          {products.map((product) => (
+            <li>
+              <ProductCard product={product} />
+            </li>
+          ))}
+        </ul>
+      </>
+    )
+  }
+</Layout>

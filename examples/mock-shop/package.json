@@ -1,0 +1,22 @@
+{
+  "name": "mock-shop-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "deploy": "shopify hydrogen deploy --worker-dir dist/server --assets-dir dist/client",
+    "typecheck": "astro check"
+  },
+  "dependencies": {
+    "@shopify/hydrogen": "2026.10.1",
+    "astro": "7.4.0",
+    "astro-hydrogen": "*"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@shopify/cli": "^4.9.4",
+    "typescript": "^5.9.3"
+  }
+}

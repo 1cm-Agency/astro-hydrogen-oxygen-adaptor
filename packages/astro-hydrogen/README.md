@@ -18,6 +18,8 @@ An [Astro](https://astro.build) adapter for [Shopify Oxygen](https://shopify.dev
 
 ## Quick start
 
+A complete storefront that runs against the mock.shop demo store with no configuration is in the repository's `examples/mock-shop` directory: product listing, product page with variant picker, cart, search and a prerendered page, all with the components below and no UI framework. To start from scratch instead:
+
 ```sh
 npm install astro-hydrogen @shopify/hydrogen
 npm install -D @shopify/cli
@@ -804,7 +806,7 @@ Deployments are immutable: each deploy uploads new code and assets under a new a
 | `astro:env`, including `getSecret()` | Supported. Values come from the Worker's bindings. |
 | i18n routing | Supported (a locale prefix fixture is covered). |
 | i18n domains | Declared `experimental`; untested. |
-| View Transitions (`<ClientRouter />`) | Used by the playground. `<ShopifyScripts />` sends page views after navigations. |
+| View Transitions (`<ClientRouter />`) | Supported. `<ShopifyScripts />` sends page views after navigations. |
 | `Astro.session` | No driver by default; see [Sessions](#sessions). |
 | Images | Sharp for prerendered pages at build time (Astro 7.4+); passthrough at runtime, no resizing. Shopify CDN images are sized by URL with `<ShopifyImage />`. |
 | Fonts | Untested. |
@@ -836,6 +838,7 @@ Production builds bundle everything and do not need this.
 | Customers are signed out at random; warning `session cookie is N bytes, over the ~4096 byte browser limit` | The session grew too large. Store less in it. |
 | `/api/cart`, `/checkout` or `/admin` return the 404 page | They are served by Hydrogen unless `shopifyRoutes` / `shopifyRedirects` is `false` or the `middleware` option is off. With a prerendered `404.astro` the Worker runs them itself, but only with `middleware` on. Check your `hydrogen.config.ts`. |
 | Prerendered pages 404 on a bare MiniOxygen or custom host, but work on Oxygen and in `astro preview` | The Worker looks for them at `HYDROGEN_ASSET_BASE_URL`, or, if that wasn't set at build time, at its own origin under `base`. Deploy with `shopify hydrogen deploy`, which sets it, or serve `dist/client` at the Worker's origin. |
+| `astro build` fails with `Named export 'parseCookie' not found` (or another export of a package you never imported) | Astro's server output imports Astro's own dependencies by name (`cookie`, `clsx`, ...), and another copy of that package is hoisted to your `node_modules`, usually by a dependency that pins an old major. The Worker bundle resolves these from Astro's package, so the deployed Worker is right either way, but Astro's prerender step imports the output in Node, which takes the hoisted copy. `npm ls cookie` shows the copies; a fresh `npm install` without the lockfile usually hoists Astro's, and an `overrides` entry in `package.json` settles it. |
 | `astro dev` shows `MiniOxygen couldn't load your app's entry point` / `No Oxygen worker entry was found` | The adapter resolves outside the project root, for example a symlinked package (`npm link`, a workspace) outside Vite's allowed file list. Allow its real path: `vite: { server: { fs: { allow: ['.', realpathSync('node_modules/astro-hydrogen')] } } }` (with `import { realpathSync } from 'node:fs'`). |
 | `astro dev` returns immediately and no output appears | Astro 7 runs `astro dev` and `astro preview` as background daemons when started by an AI agent. Use `astro dev status`, `astro dev logs` and `astro dev stop`. |
 | Build fails: `"Redis" is not exported by "__vite-optional-peer-dep:@upstash/redis:unstorage"` | Install the session driver's SDK. See [Sessions](#sessions). |

@@ -24,8 +24,5 @@
   },
   "engines": {
     "node": "^22.12 || ^24"
-  },
-  "devDependencies": {
-    "@shopify/mini-oxygen": "^4.2.3"
   }
 }

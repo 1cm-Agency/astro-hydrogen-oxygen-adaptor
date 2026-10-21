@@ -1,6 +1,6 @@
 /**
  * Builds a fixture project with Astro's programmatic API and drives the resulting Worker in
- * MiniOxygen (workerd), the way the repo-level `test/oxygen-worker.test.mjs` does for the playground.
+ * MiniOxygen (workerd), the way the repo-level `test/oxygen-worker.test.mjs` does for the example storefront.
  *
  *   const site = await buildFixture('minimal', { cdn: true, env: { SESSION_SECRET: '...' } });
  *   const res = await site.fetch('/api/cart');

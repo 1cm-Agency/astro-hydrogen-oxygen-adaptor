@@ -1,5 +1,5 @@
 /**
- * Builds the playground as `shopify hydrogen deploy` would, then runs the Worker in MiniOxygen
+ * Builds examples/mock-shop as `shopify hydrogen deploy` would, then runs the Worker in MiniOxygen
  * (workerd) with the client assets on a simulated Oxygen CDN. Needs network access to mock.shop.
  */
 import assert from 'node:assert/strict';
@@ -9,8 +9,8 @@ import { after, before, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { buildAssetsUrl, createMiniOxygen, Request } from '@shopify/mini-oxygen';
 
-const playground = fileURLToPath(new URL('../playground/', import.meta.url));
-const workerDir = new URL('../playground/dist/server/', import.meta.url);
+const example = fileURLToPath(new URL('../examples/mock-shop/', import.meta.url));
+const workerDir = new URL('../examples/mock-shop/dist/server/', import.meta.url);
 const ASSETS_PORT = 9177;
 const ORIGIN = 'http://localhost';
 
@@ -18,7 +18,7 @@ let miniOxygen;
 
 before(async () => {
   execFileSync('npx', ['astro', 'build'], {
-    cwd: playground,
+    cwd: example,
     stdio: 'pipe',
     env: { ...process.env, HYDROGEN_ASSET_BASE_URL: buildAssetsUrl(ASSETS_PORT) },
   });
@@ -59,7 +59,7 @@ describe('Oxygen Worker', () => {
     const html = await response.text();
     assert.match(html, /<h1>Mock\.shop<\/h1>/);
     assert.match(html, /href="\/products\/[^"]+"/);
-    assert.match(html, /<footer/, 'renders the footer (built-in content without Contentstack)');
+    assert.match(html, /<footer/, 'renders the layout');
     assert.ok(html.includes(buildAssetsUrl(ASSETS_PORT)), 'client assets use the CDN prefix');
   });
 

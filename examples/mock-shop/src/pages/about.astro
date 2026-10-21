@@ -1,0 +1,17 @@
+---
+// Prerendered at build time. The adapter gives prerendered pages a buyer-less Storefront client,
+// and serves the resulting HTML from Oxygen's asset CDN.
+export const prerender = true;
+
+import { gql } from '@shopify/hydrogen';
+import Layout from '../layouts/Layout.astro';
+
+const QUERY = gql(`query AboutShop { shop { name description } }`);
+const { data } = await Astro.locals.storefront.graphql(QUERY);
+---
+
+<Layout title={`About ${data?.shop.name}`}>
+  <h1>About {data?.shop.name}</h1>
+  <p>{data?.shop.description}</p>
+  <p data-built-at>Built at {new Date().toISOString()}</p>
+</Layout>

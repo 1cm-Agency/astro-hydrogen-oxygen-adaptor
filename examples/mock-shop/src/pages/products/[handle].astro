@@ -1,0 +1,52 @@
+---
+import { getSelectedProductOptions } from '@shopify/hydrogen';
+import Money from 'astro-hydrogen/components/Money.astro';
+import ProductForm from 'astro-hydrogen/components/ProductForm.astro';
+import ShopifyImage from 'astro-hydrogen/components/ShopifyImage.astro';
+import { PRODUCT_FORM_FRAGMENT } from 'astro-hydrogen/runtime/product';
+import Layout from '../../layouts/Layout.astro';
+
+const QUERY = `query Product($handle: String!, $selectedOptions: [SelectedOptionInput!]!) {
+  product(handle: $handle) {
+    ...ProductFormFields
+    description
+    descriptionHtml
+    images(first: 6) { nodes { id url altText } }
+  }
+}
+${PRODUCT_FORM_FRAGMENT}`;
+
+const { data } = await Astro.locals.storefront.graphql(QUERY, {
+  variables: {
+    handle: Astro.params.handle!,
+    selectedOptions: getSelectedProductOptions({ searchParams: Astro.url.searchParams }),
+  },
+});
+const product = data?.product;
+if (!product) return new Response('Product not found', { status: 404 });
+---
+
+<Layout title={product.title} description={product.description}>
+  <div class="product-layout">
+    <div class="product-gallery">
+      {
+        product.images.nodes.map((image, index) => (
+          <ShopifyImage
+            src={image.url}
+            alt={image.altText || product.title}
+            width={600}
+            widths={[600, 1200]}
+            sizes="(min-width: 768px) 50vw, 100vw"
+            loading={index === 0 ? 'eager' : 'lazy'}
+          />
+        ))
+      }
+    </div>
+    <div>
+      <h1>{product.title}</h1>
+      <p><Money money={product.selectedOrFirstAvailableVariant?.price ?? product.priceRange.minVariantPrice} /></p>
+      <ProductForm product={product} />
+      <div set:html={product.descriptionHtml} />
+    </div>
+  </div>
+</Layout>

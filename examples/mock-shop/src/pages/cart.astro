@@ -1,0 +1,41 @@
+---
+import { getCart, getCartId } from '@shopify/hydrogen';
+import CartForm from 'astro-hydrogen/components/CartForm.astro';
+import Money from 'astro-hydrogen/components/Money.astro';
+import Layout from '../layouts/Layout.astro';
+
+// Plain HTML forms post to /api/cart and redirect back here, so the page works without JavaScript.
+const { cart } = await getCart(getCartId(Astro.request), Astro.locals.storefront);
+const lines = cart?.lines.nodes ?? [];
+---
+
+<Layout title="Cart">
+  <h1>Cart</h1>
+  {
+    lines.length === 0 ? (
+      <p>Your cart is empty. <a href="/">Keep shopping</a>.</p>
+    ) : (
+      <>
+        <ul class="cart-lines">
+          {lines.map((line) => (
+            <li>
+              <div class="line-title">
+                <a href={`/products/${line.merchandise.product.handle}`}>{line.merchandise.product.title}</a>
+                <div class="muted">{line.merchandise.title}</div>
+              </div>
+              <Money money={line.cost.totalAmount} />
+              <CartForm action="set" lineId={line.id} quantity={line.quantity} />
+              <CartForm action="remove" lineId={line.id} label="Remove" />
+            </li>
+          ))}
+        </ul>
+        <div class="cart-summary">
+          <p>
+            Subtotal: <Money money={cart!.cost.subtotalAmount} />
+          </p>
+          <a class="button" href={cart!.checkoutUrl}>Checkout</a>
+        </div>
+      </>
+    )
+  }
+</Layout>

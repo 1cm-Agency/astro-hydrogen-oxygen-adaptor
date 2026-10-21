@@ -1,0 +1,35 @@
+---
+import Money from 'astro-hydrogen/components/Money.astro';
+import ShopifyImage from 'astro-hydrogen/components/ShopifyImage.astro';
+import type { MoneyV2 } from '@shopify/hydrogen';
+
+interface Props {
+  product: {
+    handle: string;
+    title: string;
+    featuredImage?: { url: string; altText?: string | null } | null;
+    priceRange: { minVariantPrice: MoneyV2 };
+  };
+  eager?: boolean;
+}
+
+const { product, eager = false } = Astro.props;
+---
+
+<a href={`/products/${product.handle}`} class="product-card">
+  {
+    product.featuredImage && (
+      <ShopifyImage
+        src={product.featuredImage.url}
+        alt={product.featuredImage.altText || product.title}
+        width={400}
+        height={400}
+        widths={[400, 800]}
+        sizes="(min-width: 768px) 25vw, 50vw"
+        loading={eager ? 'eager' : 'lazy'}
+      />
+    )
+  }
+  <h2>{product.title}</h2>
+  <Money money={product.priceRange.minVariantPrice} />
+</a>

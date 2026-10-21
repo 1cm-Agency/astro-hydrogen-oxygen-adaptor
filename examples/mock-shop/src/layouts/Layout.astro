@@ -1,0 +1,44 @@
+---
+import PredictiveSearchForm from 'astro-hydrogen/components/PredictiveSearchForm.astro';
+import ShopifyScripts from 'astro-hydrogen/components/ShopifyScripts.astro';
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{title}</title>
+    {description && <meta name="description" content={description} />}
+    <!-- Renders nothing (and logs one warning) without a shop ID, as on mock.shop. -->
+    <ShopifyScripts />
+  </head>
+  <body>
+    <header class="site-header">
+      <nav>
+        <a href="/">Home</a>
+        <a href="/search">Search</a>
+        <a href="/cart">Cart</a>
+      </nav>
+      <PredictiveSearchForm action="/search" placeholder="Search products" />
+    </header>
+    <main>
+      <slot />
+    </main>
+    <footer class="site-footer">
+      <p>
+        An <a href="https://github.com/Shopify/hydrogen">Astro and Hydrogen</a> demo on
+        <a href="https://mock.shop">mock.shop</a>. <a href="/about">About</a>
+      </p>
+    </footer>
+  </body>
+</html>

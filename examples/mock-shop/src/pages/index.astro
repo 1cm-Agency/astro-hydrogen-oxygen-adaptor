@@ -1,0 +1,34 @@
+---
+import { gql } from '@shopify/hydrogen';
+import ProductCard from '../components/ProductCard.astro';
+import Layout from '../layouts/Layout.astro';
+
+const QUERY = gql(`query Home {
+  shop { name description }
+  products(first: 12) {
+    nodes {
+      id
+      handle
+      title
+      featuredImage { url altText }
+      priceRange { minVariantPrice { amount currencyCode } }
+    }
+  }
+}`);
+
+const { data } = await Astro.locals.storefront.graphql(QUERY);
+const products = data?.products.nodes ?? [];
+---
+
+<Layout title={data?.shop.name ?? 'Shop'} description={data?.shop.description ?? undefined}>
+  <h1>{data?.shop.name}</h1>
+  <ul class="product-grid">
+    {
+      products.map((product, index) => (
+        <li>
+          <ProductCard product={product} eager={index < 4} />
+        </li>
+      ))
+    }
+  </ul>
+</Layout>
