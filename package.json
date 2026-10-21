@@ -1,128 +1,31 @@
 {
-  "name": "astro-hydrogen",
-  "version": "0.1.0",
-  "description": "Astro adapter for Shopify Hydrogen: deploy to Oxygen and get a request-scoped Storefront API client in every page, with no UI framework required.",
-  "type": "module",
+  "name": "astro-hydrogen-monorepo",
+  "private": true,
   "license": "MIT",
-  "sideEffects": [
-    "./dist/runtime/process-shim.js"
-  ],
-  "keywords": [
-    "withastro",
-    "astro-adapter",
-    "astro-integration",
-    "shopify",
-    "hydrogen",
-    "oxygen",
-    "headless-commerce"
-  ],
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    },
-    "./config": {
-      "types": "./dist/config.d.ts",
-      "default": "./dist/config.js"
-    },
-    "./entrypoints/server": {
-      "types": "./dist/entrypoints/server.d.ts",
-      "default": "./dist/entrypoints/server.js"
-    },
-    "./entrypoints/middleware": {
-      "types": "./dist/entrypoints/middleware.d.ts",
-      "default": "./dist/entrypoints/middleware.js"
-    },
-    "./entrypoints/preview": {
-      "types": "./dist/entrypoints/preview.d.ts",
-      "default": "./dist/entrypoints/preview.js"
-    },
-    "./runtime/cookie-session": {
-      "types": "./dist/runtime/cookie-session.d.ts",
-      "default": "./dist/runtime/cookie-session.js"
-    },
-    "./runtime/storefront": {
-      "types": "./dist/runtime/storefront.d.ts",
-      "default": "./dist/runtime/storefront.js"
-    },
-    "./runtime/shopify-scripts": {
-      "types": "./dist/runtime/shopify-scripts.d.ts",
-      "default": "./dist/runtime/shopify-scripts.js"
-    },
-    "./runtime/image": {
-      "types": "./dist/runtime/image.d.ts",
-      "default": "./dist/runtime/image.js"
-    },
-    "./runtime/money": {
-      "types": "./dist/runtime/money.d.ts",
-      "default": "./dist/runtime/money.js"
-    },
-    "./runtime/hydrogen-request": {
-      "types": "./dist/runtime/hydrogen-request.d.ts",
-      "default": "./dist/runtime/hydrogen-request.js"
-    },
-    "./runtime/*": {
-      "types": "./dist/runtime/*.d.ts",
-      "default": "./dist/runtime/*.js"
-    },
-    "./content": {
-      "types": "./dist/content/index.d.ts",
-      "default": "./dist/content/index.js"
-    },
-    "./cache": {
-      "types": "./dist/cache/oxygen.d.ts",
-      "default": "./dist/cache/oxygen.js"
-    },
-    "./client/*": {
-      "types": "./dist/client/*.d.ts",
-      "default": "./dist/client/*.js"
-    },
-    "./components/*": "./components/*",
-    "./types.d.ts": "./types.d.ts",
-    "./package.json": "./package.json"
-  },
-  "files": [
-    "dist",
-    "components",
-    "types.d.ts",
-    "LICENSE",
-    "CHANGELOG.md"
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "examples/*"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "dev": "tsc -p tsconfig.json --watch",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test 'test/*.test.js'",
-    "test:coverage": "npm run build && node --test --experimental-test-coverage --test-coverage-include='dist/**' 'test/*.test.js'",
-    "test:integration": "npm run build && node --test 'test/integration/*.test.js'",
-    "prepack": "npm run build"
-  },
-  "dependencies": {
-    "@shopify/mini-oxygen": "^4.2.3",
-    "rolldown": "~1.2.12"
-  },
-  "peerDependencies": {
-    "@shopify/hydrogen": ">=2026.10.0",
-    "astro": "^7.0.0"
-  },
-  "devDependencies": {
-    "@astrojs/solid-js": "^7.1.0",
-    "@astrojs/svelte": "^9.1.0",
-    "@shopify/hydrogen": "2026.10.1",
-    "@shopify/oxygen-workers-types": "^4.2.0",
-    "@types/node": "^22.10.6",
-    "astro": "7.4.0",
-    "solid-js": "^1.9.17",
-    "svelte": "^5.57.2",
-    "typescript": "^5.9.3",
-    "vite": "^8.0.7"
+    "build": "npm run build -w astro-hydrogen",
+    "dev": "npm run build && npm run dev -w examples/mock-shop",
+    "dev:adapter": "npm run dev -w astro-hydrogen",
+    "test": "npm run test -w astro-hydrogen",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "example:dev": "npm run dev -w examples/mock-shop",
+    "example:build": "npm run build -w examples/mock-shop",
+    "example:preview": "npm run preview -w examples/mock-shop",
+    "test:e2e": "npm run build && node --test test/oxygen-worker.test.mjs",
+    "test:integration": "npm run test:integration -w astro-hydrogen",
+    "test:coverage": "npm run test:coverage -w astro-hydrogen",
+    "ci": "npm run build && npm run typecheck && npm test && npm run test:integration && npm run test:e2e",
+    "release:check": "npm pack --dry-run -w astro-hydrogen && npm run ci"
   },
   "engines": {
     "node": "^22.12 || ^24"
   },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
+  "devDependencies": {
+    "@shopify/mini-oxygen": "^4.2.3"
   }
 }

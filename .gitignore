@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.astro/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+storefront-graphql-env.d.ts
+customer-account-graphql-env.d.ts
+.shopify
+*.tgz
