@@ -23,16 +23,19 @@ jobs:
           node-version: 24.x
           cache: npm
           registry-url: https://registry.npmjs.org
-      - name: Check the tag matches the package version
+      # astro-hydrogen and create-astro-hydrogen are released together with the same version.
+      - name: Check the tag matches both package versions
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          version=$(node -p "require('./packages/astro-hydrogen/package.json').version")
-          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
-            echo "Tag ${GITHUB_REF_NAME} does not match package version v${version}" >&2
-            exit 1
-          fi
+          for pkg in astro-hydrogen create-astro-hydrogen; do
+            version=$(node -p "require('./packages/${pkg}/package.json').version")
+            if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+              echo "Tag ${GITHUB_REF_NAME} does not match ${pkg} version v${version}" >&2
+              exit 1
+            fi
+          done
       - run: npm ci
       - run: npm run ci
-      - run: npm publish -w astro-hydrogen --provenance --access public
+      - run: npm publish -w astro-hydrogen -w create-astro-hydrogen --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
