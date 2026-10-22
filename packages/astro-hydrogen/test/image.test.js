@@ -42,13 +42,36 @@ describe('shopifyImageUrl', () => {
 });
 
 describe('shopifyImageSrcSet', () => {
+  const params = (candidate) => new URL(candidate.replace(/ \d+w$/, '')).searchParams;
+
   it('builds one candidate per width', () => {
-    const srcset = shopifyImageSrcSet(CDN, { widths: [200, 400], height: 100, crop: 'top' });
-    const candidates = srcset.split(', ');
+    const candidates = shopifyImageSrcSet(CDN, { widths: [200, 400] }).split(', ');
     assert.equal(candidates.length, 2);
-    assert.match(candidates[0], / 200w$/);
-    for (const part of ['width=200', 'height=100', 'crop=top']) assert.ok(candidates[0].includes(part), part);
-    assert.ok(candidates[1].endsWith(' 400w'));
+    assert.match(candidates[0], /width=200.* 200w$/);
+    assert.match(candidates[1], /width=400.* 400w$/);
+  });
+
+  it('scales height with each candidate when width and height fix the ratio', () => {
+    // A 320x320 display must not produce 640x320: the ratio is kept, not the height.
+    const candidates = shopifyImageSrcSet(CDN, { widths: [320, 640, 1000], width: 320, height: 320, crop: 'center' }).split(', ');
+    assert.deepEqual(
+      candidates.map((c) => [params(c).get('width'), params(c).get('height'), params(c).get('crop')]),
+      [
+        ['320', '320', 'center'],
+        ['640', '640', 'center'],
+        ['1000', '1000', 'center'],
+      ],
+    );
+    const portrait = shopifyImageSrcSet(CDN, { widths: [200, 300], width: 400, height: 300 }).split(', ');
+    assert.deepEqual(portrait.map((c) => params(c).get('height')), ['150', '225']);
+  });
+
+  it('omits height and crop from candidates when there is no width to derive the ratio from', () => {
+    for (const candidate of shopifyImageSrcSet(CDN, { widths: [200, 400], height: 100, crop: 'top' }).split(', ')) {
+      assert.equal(params(candidate).has('height'), false, candidate);
+      assert.equal(params(candidate).has('crop'), false, candidate);
+      assert.ok(params(candidate).has('width'));
+    }
   });
 
   it('has default widths', () => {

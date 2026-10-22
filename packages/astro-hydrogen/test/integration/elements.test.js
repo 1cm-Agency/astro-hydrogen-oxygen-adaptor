@@ -78,6 +78,9 @@ describe('elements fixture', () => {
       assert.equal(candidates.length, 2);
       assert.match(candidates[0], /width=200.* 200w$/);
       assert.match(candidates[1], /width=400.* 400w$/);
+      // 400x300 display: each candidate keeps the 4:3 ratio and the crop, instead of a fixed height.
+      const candidateParams = candidates.map((c) => new URL(c.replace(/ \d+w$/, '')).searchParams);
+      assert.deepEqual(candidateParams.map((p) => [p.get('height'), p.get('crop')]), [['150', 'center'], ['300', 'center']]);
       assert.equal(attr(cdn, 'sizes'), '50vw');
       assert.equal(attr(cdn, 'alt'), 'Product');
       assert.equal(attr(cdn, 'loading'), 'lazy');

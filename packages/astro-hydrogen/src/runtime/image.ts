@@ -15,7 +15,15 @@ export interface ShopifyImageOptions {
 export interface ShopifyImageSrcSetOptions {
   /** Widths in pixels, one `srcset` candidate each. Defaults to `[400, 800, 1200]`. */
   widths?: readonly number[];
+  /**
+   * Display width in pixels. Together with `height` it fixes the aspect ratio: each candidate gets
+   * `height * candidateWidth / width`. Without it, `height` and `crop` are left out of the
+   * candidates, which then keep the image's own ratio.
+   */
+  width?: number;
+  /** Display height in pixels; see `width`. */
   height?: number;
+  /** Which part to keep when `width` and `height` change the aspect ratio. */
   crop?: ShopifyImageCrop;
 }
 
@@ -43,10 +51,14 @@ export function shopifyImageUrl(url: string, { width, height, crop }: ShopifyIma
   return parsed.href;
 }
 
-/** A `srcset` value with one `{url} {width}w` candidate per width. Non-Shopify URLs give an empty string. */
+/**
+ * A `srcset` value with one `{url} {width}w` candidate per width. Non-Shopify URLs give an empty
+ * string. `height` applies only together with `width`, scaled to each candidate, so every candidate
+ * has the aspect ratio of the displayed image rather than one fixed height.
+ */
 export function shopifyImageSrcSet(
   url: string,
-  { widths = [400, 800, 1200], height, crop }: ShopifyImageSrcSetOptions = {},
+  { widths = [400, 800, 1200], width, height, crop }: ShopifyImageSrcSetOptions = {},
 ): string {
   let parsed: URL;
   try {
@@ -55,5 +67,12 @@ export function shopifyImageSrcSet(
     return '';
   }
   if (!isShopifyImageHost(parsed.hostname)) return '';
-  return widths.map((width) => `${shopifyImageUrl(url, { width, height, crop })} ${width}w`).join(', ');
+  const ratio = width && height ? height / width : undefined;
+  return widths
+    .map((candidate) => {
+      const options: ShopifyImageOptions =
+        ratio === undefined ? { width: candidate } : { width: candidate, height: Math.round(candidate * ratio), crop };
+      return `${shopifyImageUrl(url, options)} ${candidate}w`;
+    })
+    .join(', ');
 }

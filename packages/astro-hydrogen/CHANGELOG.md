@@ -2,6 +2,12 @@
 
 All notable changes to `astro-hydrogen` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow [Semantic Versioning](https://semver.org/) once it reaches 1.0.
 
+## [Unreleased]
+
+### Fixed
+
+- `<ShopifyImage />` and `shopifyImageSrcSet` keep the aspect ratio across `srcset` candidates. With `width` and `height` set, each candidate's height is scaled to its width (a `320`×`320` image now yields `640`×`640`, not `640`×`320`), and `crop` follows. `shopifyImageSrcSet` gained a `width` option for this; without it, `height` and `crop` are left out of the candidates.
+
 ## [0.1.0] - 2026-10-21
 
 First release.

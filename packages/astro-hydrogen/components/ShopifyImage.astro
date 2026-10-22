@@ -24,7 +24,8 @@ interface Props extends Omit<HTMLAttributes<'img'>, 'src' | 'srcset' | 'alt' | '
 
 const { src, alt, width, height, widths, crop, sizes, loading = 'lazy', decoding = 'async', ...attrs } = Astro.props;
 
-const srcset = widths?.length ? shopifyImageSrcSet(src, { widths, height, crop }) : '';
+// `width` carries the aspect ratio: with `height`, each candidate is scaled to it instead of all sharing one height.
+const srcset = widths?.length ? shopifyImageSrcSet(src, { widths, width, height, crop }) : '';
 ---
 
 <img

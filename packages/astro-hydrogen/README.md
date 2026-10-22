@@ -545,7 +545,7 @@ An `<img>` for a Shopify CDN image. It sets `width`, `height` and `crop` as URL 
 | `src` | The image URL. |
 | `alt` | Required. Use `""` for a decorative image. |
 | `width` | Display width in pixels. Sizes `src`. |
-| `height` | Display height in pixels. |
+| `height` | Display height in pixels. With `width` it fixes the aspect ratio: `srcset` candidates are scaled to it, so a `320`×`320` image yields `640`×`640`, not `640`×`320`. |
 | `widths` | Candidate widths for `srcset`. |
 | `sizes` | The `sizes` attribute. Only rendered with `widths`. |
 | `crop` | `top`, `center`, `bottom`, `left` or `right`. |
@@ -635,7 +635,7 @@ const stop = onCart((cart) => render(cart));
 
 ### Helpers
 
-`astro-hydrogen/runtime/image` exports `shopifyImageUrl(url, { width, height, crop })`, `shopifyImageSrcSet(url, { widths, height, crop })` and `isShopifyImageHost(hostname)`. `astro-hydrogen/runtime/money` exports `resolveLocale(i18n)`, which turns `{ language: 'EN', country: 'CA' }` into `en-CA`, and `formatPrice(money | [min, max], { locale?, i18n?, ...formatMoneyOptions })`, which returns the localized string. Use them where a component does not fit, such as `og:image` URLs or client islands.
+`astro-hydrogen/runtime/image` exports `shopifyImageUrl(url, { width, height, crop })`, `shopifyImageSrcSet(url, { widths, width, height, crop })` (`height` and `crop` apply only with `width`, which gives the ratio to scale each candidate by) and `isShopifyImageHost(hostname)`. `astro-hydrogen/runtime/money` exports `resolveLocale(i18n)`, which turns `{ language: 'EN', country: 'CA' }` into `en-CA`, and `formatPrice(money | [min, max], { locale?, i18n?, ...formatMoneyOptions })`, which returns the localized string. Use them where a component does not fit, such as `og:image` URLs or client islands.
 
 ## Content collections
 
