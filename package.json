@@ -11,16 +11,16 @@
     "build": "npm run build -w astro-hydrogen",
     "dev": "npm run build && npm run dev -w examples/mock-shop",
     "dev:adapter": "npm run dev -w astro-hydrogen",
-    "test": "npm run test -w astro-hydrogen",
+    "test": "npm run test -w astro-hydrogen -w create-astro-hydrogen",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "example:dev": "npm run dev -w examples/mock-shop",
     "example:build": "npm run build -w examples/mock-shop",
     "example:preview": "npm run preview -w examples/mock-shop",
     "test:e2e": "npm run build && node --test test/oxygen-worker.test.mjs",
-    "test:integration": "npm run test:integration -w astro-hydrogen",
+    "test:integration": "npm run test:integration -w astro-hydrogen -w create-astro-hydrogen",
     "test:coverage": "npm run test:coverage -w astro-hydrogen",
     "ci": "npm run build && npm run typecheck && npm test && npm run test:integration && npm run test:e2e",
-    "release:check": "npm pack --dry-run -w astro-hydrogen && npm run ci"
+    "release:check": "npm pack --dry-run -w astro-hydrogen -w create-astro-hydrogen && npm run ci"
   },
   "engines": {
     "node": "^22.12 || ^24"

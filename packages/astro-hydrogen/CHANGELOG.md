@@ -4,6 +4,10 @@ All notable changes to `astro-hydrogen` are documented here. The format follows 
 
 ## [Unreleased]
 
+### Added
+
+- `npm create astro-hydrogen@latest my-shop` (package `create-astro-hydrogen`, released with the adapter): in a new directory it scaffolds a storefront from the mock-shop example; in an existing Astro project it installs the dependencies, sets `output: 'server'` and `adapter: hydrogen()` in the Astro config, adds the `deploy` script and a product page and cart page, and never overwrites a file. Works with npm, pnpm, yarn and bun.
+
 ### Fixed
 
 - `<ShopifyImage />` and `shopifyImageSrcSet` keep the aspect ratio across `srcset` candidates. With `width` and `height` set, each candidate's height is scaled to its width (a `320`×`320` image now yields `640`×`640`, not `640`×`320`), and `crop` follows. `shopifyImageSrcSet` gained a `width` option for this; without it, `height` and `crop` are left out of the candidates.

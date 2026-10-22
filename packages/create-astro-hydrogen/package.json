@@ -1,0 +1,48 @@
+{
+  "name": "create-astro-hydrogen",
+  "version": "0.1.0",
+  "description": "Scaffold an Astro storefront for Shopify Oxygen, or add the astro-hydrogen adapter to an existing Astro project, with one command.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Carl Roberts (https://github.com/cwroberts401)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/1cm-Agency/astro-hydrogen-oxygen-adaptor.git",
+    "directory": "packages/create-astro-hydrogen"
+  },
+  "homepage": "https://github.com/1cm-Agency/astro-hydrogen-oxygen-adaptor/tree/main/packages/create-astro-hydrogen#readme",
+  "bugs": {
+    "url": "https://github.com/1cm-Agency/astro-hydrogen-oxygen-adaptor/issues"
+  },
+  "keywords": [
+    "astro",
+    "withastro",
+    "shopify",
+    "hydrogen",
+    "oxygen",
+    "create"
+  ],
+  "bin": {
+    "create-astro-hydrogen": "./bin/create-astro-hydrogen.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "template",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "sync-template": "node scripts/sync-template.js",
+    "prepack": "node scripts/sync-template.js",
+    "test": "node scripts/sync-template.js && node --test 'test/*.test.js'",
+    "test:integration": "node scripts/sync-template.js && node --test 'test/integration/*.test.js'"
+  },
+  "engines": {
+    "node": "^22.12 || ^24"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

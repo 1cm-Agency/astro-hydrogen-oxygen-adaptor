@@ -18,7 +18,15 @@ An [Astro](https://astro.build) adapter for [Shopify Oxygen](https://shopify.dev
 
 ## Quick start
 
-A complete storefront that runs against the mock.shop demo store with no configuration is in [`examples/mock-shop`](https://github.com/1cm-Agency/astro-hydrogen-oxygen-adaptor/tree/main/examples/mock-shop): product listing, product page with variant picker, cart, search and a prerendered page, all with the components below and no UI framework. To start from scratch instead:
+One command sets up a project:
+
+```sh
+npm create astro-hydrogen@latest my-shop
+```
+
+In an empty or new directory it creates a complete storefront that runs against the mock.shop demo store with no configuration: product listing, product page with variant picker, cart, search and a prerendered page, built with the components below and no UI framework (the same code as [`examples/mock-shop`](https://github.com/1cm-Agency/astro-hydrogen-oxygen-adaptor/tree/main/examples/mock-shop)). Run it in an existing Astro project instead (`npm create astro-hydrogen@latest .`) and it installs the dependencies, sets `output: 'server'` and `adapter: hydrogen()` in your Astro config, adds the `deploy` script, and adds a working product page and cart page without overwriting anything. It also works with `pnpm create`, `yarn create` and `bun create`.
+
+To do the same by hand:
 
 ```sh
 npm install astro-hydrogen @shopify/hydrogen

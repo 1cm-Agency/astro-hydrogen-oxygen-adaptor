@@ -31,8 +31,13 @@ packages/astro-hydrogen/        the adapter (the published package)
   test/integration/*.test.js      integration tests (build and run fixtures in workerd)
   test/fixtures/                  small Astro projects used by the integration tests (see its README)
   test/helpers/                   fixture.js (build + Worker harness), html.js
+packages/create-astro-hydrogen/ `npm create astro-hydrogen`: scaffolds a new storefront from the example, or
+                                adds the adapter to an existing Astro project (no dependencies, no build step)
+  bin/, src/                      the CLI; src/init-files/ holds the pages added to existing projects
+  scripts/sync-template.js        copies examples/mock-shop into template/ (gitignored) before tests and publish
+  test/                           unit tests; test/integration/ scaffolds, installs and builds a project
 examples/mock-shop/             example storefront against the mock.shop demo store: plain .astro pages,
-                                the adapter's components, no UI framework
+                                the adapter's components, no UI framework; also the scaffold template
 test/oxygen-worker.test.mjs     e2e: builds the example and drives the Worker in MiniOxygen
 ```
 
@@ -57,15 +62,15 @@ The example uses the mock.shop demo store unless you give it a `.env` (see `exam
 | `npm run dev` | Build the adapter, then `astro dev` in `examples/mock-shop`. |
 | `npm run dev:adapter` | `tsc --watch` for the adapter. |
 | `npm run typecheck` | `tsc --noEmit` in the package and `astro check` in the example. |
-| `npm test` | Unit tests: build, then `node --test 'test/*.test.js'` in the package. |
-| `npm run test:integration` | Build, then `node --test 'test/integration/*.test.js'`: builds each fixture and drives it in workerd, `astro dev` and `astro preview`. |
+| `npm test` | Unit tests of both packages: the adapter (build, then `node --test 'test/*.test.js'`) and the scaffolder (template sync, then its offline tests). |
+| `npm run test:integration` | The adapter's: build, then `node --test 'test/integration/*.test.js'`, which builds each fixture and drives it in workerd, `astro dev` and `astro preview`. The scaffolder's: create a project in a temp dir, `npm install` it from the registry and `astro build` it. |
 | `npm run test:coverage` | Unit tests with Node's coverage over `dist/`. |
 | `npm run test:e2e` | Build, then `test/oxygen-worker.test.mjs`: builds the example the way `shopify hydrogen deploy` would and runs it in MiniOxygen. Needs network access to mock.shop. |
 | `npm run example:dev`, `example:build`, `example:preview` | The example's own scripts. |
 | `npm run ci` | What CI runs: build, typecheck, unit, integration and e2e tests. |
-| `npm run release:check` | `npm pack --dry-run` for the package, then `npm run ci`. |
+| `npm run release:check` | `npm pack --dry-run` for both packages, then `npm run ci`. |
 
-In `packages/astro-hydrogen` the same names exist (`build`, `dev`, `typecheck`, `test`, `test:coverage`, `test:integration`). To run one file: `node --test test/integration/minimal.test.js` after `npm run build`.
+In `packages/astro-hydrogen` the same names exist (`build`, `dev`, `typecheck`, `test`, `test:coverage`, `test:integration`). To run one file: `node --test test/integration/minimal.test.js` after `npm run build`. In `packages/create-astro-hydrogen`: `test`, `test:integration` and `sync-template`; to try the CLI from the checkout, `node packages/create-astro-hydrogen/bin/create-astro-hydrogen.js <dir> --no-install`.
 
 ## Request lifecycle
 
@@ -107,7 +112,7 @@ Oxygen -> entrypoints/server.ts (module Worker)
 
 ## Releasing
 
-CI runs on every push to `main` and every pull request; the release workflow runs on `v*` tags and publishes with npm provenance, which requires this repository to stay public. See `.github/workflows`. Update `packages/astro-hydrogen/CHANGELOG.md` and the package version before tagging.
+CI runs on every push to `main` and every pull request; the release workflow runs on `v*` tags and publishes both packages with npm provenance, which requires this repository to stay public. See `.github/workflows`. `astro-hydrogen` and `create-astro-hydrogen` share one version: bump both `package.json` files and update `packages/astro-hydrogen/CHANGELOG.md` before tagging. The scaffolder pins the adapter version it writes into new projects from the adapter's `package.json` at publish time.
 
 ## License
 
