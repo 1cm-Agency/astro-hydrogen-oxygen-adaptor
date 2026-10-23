@@ -1,8 +1,10 @@
 # astro-hydrogen
 
-An [Astro](https://astro.build) adapter for [Shopify Oxygen](https://shopify.dev/docs/storefronts/headless/hydrogen/deployments). It builds your site into a single module Worker that Oxygen can run, and wires [`@shopify/hydrogen`](https://www.npmjs.com/package/@shopify/hydrogen) into every request: a request-scoped Storefront API client, Hydrogen's cart, search, checkout and redirect handlers, an encrypted cookie session, and optional Customer Account login.
+Deploy an [Astro](https://astro.build) storefront straight to [Shopify Oxygen](https://shopify.dev/docs/storefronts/headless/hydrogen/deployments), the hosting that comes with your store. [Hydrogen](https://www.npmjs.com/package/@shopify/hydrogen) handles the commerce primitives; you write plain `.astro` pages and add islands in whatever framework you like, or none.
 
-`astro dev` and `astro preview` run your server code in MiniOxygen (workerd), the same runtime as Oxygen.
+The adapter builds your site into the single module Worker Oxygen runs, and wires Hydrogen into every request: a Storefront API client scoped to the buyer, Hydrogen's cart, search, checkout and redirect handlers, an encrypted cookie session, and optional Customer Account login. `astro dev` and `astro preview` run your server code in MiniOxygen (workerd), the same runtime as Oxygen, so local and production behave the same.
+
+This is the full reference. For a quicker tour, start with the [repository README](https://github.com/1cm-Agency/astro-hydrogen-oxygen-adaptor#readme).
 
 **Compared with `@astrojs/cloudflare`.** Both produce a Worker. Oxygen is a more restricted Worker platform: no Node.js compatibility, no KV or Durable Objects, only environment variables and the Cache API. It is deployed with the Shopify CLI, not Wrangler. This adapter bundles the Worker for those limits, reads Shopify's `oxygen-buyer-*` headers, and adds Hydrogen. It does not use Cloudflare bindings.
 
