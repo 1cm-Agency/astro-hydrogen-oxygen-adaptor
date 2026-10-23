@@ -98,13 +98,23 @@ const parseTags = (header: string | null) =>
     .map((tag) => tag.trim())
     .filter(Boolean);
 
-/** Path (with the sorted, filtered query) that identifies a page in the cache. */
+/** Path (with the sorted, filtered query) that identifies a page for `invalidate({ path })`. */
 export function pathKey(url: URL): string {
   const params = new URLSearchParams(url.searchParams);
   for (const name of [...params.keys()]) if (IGNORED_PARAM.test(name)) params.delete(name);
   params.sort();
   const query = params.toString();
   return `${url.pathname}${query ? `?${query}` : ''}`;
+}
+
+/**
+ * What a stored page is keyed by: the origin and the path key. One deployment can answer several
+ * domains (markets, a preview domain) with different content at the same path, so the origin is
+ * part of the identity. `invalidate({ path })` has no origin, so path tags stay origin-free and
+ * clear that path on every domain.
+ */
+export function pageKey(url: URL): string {
+  return `${url.origin}${pathKey(url)}`;
 }
 
 async function sha256Hex(value: string): Promise<string> {
@@ -214,7 +224,7 @@ export default function oxygenCacheProvider(config?: OxygenCacheOptions): Oxygen
       let key: Request | undefined;
       try {
         cache = await open();
-        key = await requestFor('page', pathKey(context.url));
+        key = await requestFor('page', pageKey(context.url));
         const cached = await cache.match(key);
         if (cached) {
           const storedAt = Number(cached.headers.get(H_STORED_AT));

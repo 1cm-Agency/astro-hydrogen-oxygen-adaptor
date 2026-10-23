@@ -2,6 +2,12 @@
 
 All notable changes to `astro-hydrogen` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow [Semantic Versioning](https://semver.org/) once it reaches 1.0.
 
+## [Unreleased]
+
+### Fixed
+
+- `oxygenCache()` keys stored pages by request origin as well as path and query. Domains served by one deployment, such as market domains or the preview domain, no longer share a cache entry for the same path. `invalidate({ path })` still clears that path on every domain.
+
 ## [0.1.1] - 2026-10-22
 
 ### Added

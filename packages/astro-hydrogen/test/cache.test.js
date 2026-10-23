@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
-import oxygenCacheProvider, { oxygenCache, parseCdnCacheControl, pathKey } from '../dist/cache/oxygen.js';
+import oxygenCacheProvider, { oxygenCache, pageKey, parseCdnCacheControl, pathKey } from '../dist/cache/oxygen.js';
 
 /** A minimal Cache API: open/match/put/delete on a Map. `stores` is exposed for assertions. */
 function fakeCaches() {
@@ -65,6 +65,11 @@ describe('helpers', () => {
   it('sorts the query and drops tracking parameters', () => {
     assert.equal(pathKey(new URL('https://a.test/p?b=2&utm_source=x&a=1')), '/p?a=1&b=2');
   });
+  it('keys pages by origin as well as path', () => {
+    assert.equal(pageKey(new URL('https://a.test/p?b=2&utm_source=x&a=1')), 'https://a.test/p?a=1&b=2');
+    assert.notEqual(pageKey(new URL('https://a.test/p')), pageKey(new URL('https://b.test/p')));
+    assert.notEqual(pageKey(new URL('https://a.test/p')), pageKey(new URL('http://a.test/p')));
+  });
 });
 
 describe('oxygen route cache provider', () => {
@@ -122,6 +127,26 @@ describe('oxygen route cache provider', () => {
     await t.settle();
     assert.equal((await t.run('/p?utm_source=z&b=2&a=1')).headers.get('x-astro-cache'), 'HIT');
     assert.equal((await t.run('/p?a=2&b=2')).headers.get('x-astro-cache'), 'MISS');
+  });
+
+  it('keeps domains served by one Worker apart, and invalidates a path on all of them', async () => {
+    // One deployment can answer a market domain and the main domain with different content at /p.
+    const t = setup();
+    const main = await t.run('https://shop.test/p');
+    await t.settle();
+    const market = await t.run('https://shop.ca/p');
+    await t.settle();
+    assert.equal(market.headers.get('x-astro-cache'), 'MISS');
+    assert.notEqual(await main.text(), await market.text());
+    assert.equal(t.renders(), 2);
+    assert.equal(fake.stores.get('astro-routes').size, 2, 'two page entries');
+    assert.equal(await (await t.run('https://shop.test/p')).text(), 'body 1');
+    assert.equal(await (await t.run('https://shop.ca/p')).text(), 'body 2');
+
+    now += 10;
+    await t.provider.invalidate({ path: '/p' });
+    assert.equal((await t.run('https://shop.test/p')).headers.get('x-astro-cache'), 'MISS');
+    assert.equal((await t.run('https://shop.ca/p')).headers.get('x-astro-cache'), 'MISS');
   });
 
   it('serves stale inside the SWR window and revalidates through waitUntil', async () => {
