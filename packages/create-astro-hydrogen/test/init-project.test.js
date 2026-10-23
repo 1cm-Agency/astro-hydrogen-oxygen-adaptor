@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { listFiles } from '../src/fs.js';
-import { astroProject, cli, tempDir, write } from './helpers.js';
+import { ADAPTER_RANGE, astroProject, cli, tempDir, write } from './helpers.js';
 
 const read = (dir, file) => readFileSync(path.join(dir, file), 'utf8');
 const snapshot = (dir) => Object.fromEntries(listFiles(dir).map((f) => [f, read(dir, f)]));
@@ -21,7 +21,7 @@ test('init mode adds the adapter to an Astro project, twice without changes', (t
   assert.match(config, /adapter: hydrogen\(\),/);
 
   const pkg = JSON.parse(read(dir, 'package.json'));
-  assert.equal(pkg.dependencies['astro-hydrogen'], '^0.1.0');
+  assert.equal(pkg.dependencies['astro-hydrogen'], ADAPTER_RANGE);
   assert.equal(pkg.dependencies['@shopify/hydrogen'], '^2026.10.1');
   assert.equal(pkg.dependencies.astro, '^7.4.0');
   assert.equal(pkg.devDependencies['@shopify/cli'], '^4.9.4');

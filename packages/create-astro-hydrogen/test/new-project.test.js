@@ -4,7 +4,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { listFiles } from '../src/fs.js';
 import { toPackageName } from '../src/new-project.js';
-import { cli, tempDir, write } from './helpers.js';
+import { ADAPTER_RANGE, cli, tempDir, write } from './helpers.js';
 
 test('derives a package name from the directory name', () => {
   assert.equal(toPackageName('My Shop!'), 'my-shop');
@@ -43,7 +43,7 @@ test('new mode scaffolds the template', (t) => {
 
   const pkg = JSON.parse(readFileSync(path.join(dir, 'package.json'), 'utf8'));
   assert.equal(pkg.name, 'my-shop');
-  assert.equal(pkg.dependencies['astro-hydrogen'], '^0.1.0');
+  assert.equal(pkg.dependencies['astro-hydrogen'], ADAPTER_RANGE);
   assert.equal(pkg.dependencies.astro, '^7.4.0');
   assert.match(pkg.scripts.deploy, /shopify hydrogen deploy/);
   for (const file of files) {

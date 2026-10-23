@@ -1,10 +1,12 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const BIN = fileURLToPath(new URL('../bin/create-astro-hydrogen.js', import.meta.url));
+// The range the template pins; it follows the adapter version, so tests must not hardcode it.
+export const ADAPTER_RANGE = `^${JSON.parse(readFileSync(new URL('../../astro-hydrogen/package.json', import.meta.url), 'utf8')).version}`;
 
 export function tempDir(t, prefix = 'create-astro-hydrogen-') {
   const dir = mkdtempSync(path.join(os.tmpdir(), prefix));
