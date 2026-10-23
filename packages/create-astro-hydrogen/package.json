@@ -1,6 +1,6 @@
 {
   "name": "create-astro-hydrogen",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Scaffold an Astro storefront for Shopify Oxygen, or add the astro-hydrogen adapter to an existing Astro project, with one command.",
   "type": "module",
   "license": "MIT",

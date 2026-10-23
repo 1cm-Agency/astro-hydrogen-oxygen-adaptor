@@ -2,7 +2,7 @@
 
 All notable changes to `astro-hydrogen` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow [Semantic Versioning](https://semver.org/) once it reaches 1.0.
 
-## [Unreleased]
+## [0.1.2] - 2026-10-22
 
 ### Fixed
 

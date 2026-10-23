@@ -1,6 +1,6 @@
 {
   "name": "astro-hydrogen",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Astro adapter for Shopify Hydrogen: deploy to Oxygen and get a request-scoped Storefront API client in every page, with no UI framework required.",
   "type": "module",
   "license": "MIT",
