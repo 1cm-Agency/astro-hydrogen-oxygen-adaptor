@@ -7,4 +7,10 @@ export default defineConfig({
   output: 'server',
   adapter: hydrogen(),
   cache: { provider: oxygenCache() },
+  // Broad rules, as a storefront caching its page shells would write them. They also match island URLs.
+  routeRules: {
+    '/islands': { maxAge: 60 },
+    '/buyer': { maxAge: 60 },
+    '/_server-islands/[name]': { maxAge: 60 },
+  },
 });

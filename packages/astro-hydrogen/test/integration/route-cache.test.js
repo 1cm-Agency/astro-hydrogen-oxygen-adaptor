@@ -59,4 +59,54 @@ describe('route cache on the Oxygen Cache API', () => {
     assert.notEqual(second.headers.get('x-astro-cache'), 'HIT');
     assert.equal(renders(site, 'cookie'), 2);
   });
+
+  describe('buyer-scoped content', () => {
+    const islandUrl = (html, name) => {
+      const match = new RegExp(`fetch\\("(/_server-islands/${name}[^"]*)"`).exec(html);
+      assert.ok(match, `no ${name} island in:\n${html.slice(0, 400)}`);
+      return match[1];
+    };
+    let shell;
+    before(async () => {
+      shell = await (await site.fetch('/islands')).text();
+      await sleep(30);
+    });
+
+    it('caches the page around the islands', async () => {
+      assert.equal((await site.fetch('/islands')).headers.get('x-astro-cache'), 'HIT');
+    });
+
+    it('does not cache a server island that a route rule matches', async () => {
+      const url = islandUrl(shell, 'CartIsland');
+      for (const cart of ['first', 'second', 'third']) {
+        const res = await site.fetch(url, { headers: { cookie: `cart=${cart}` } });
+        assert.equal(res.status, 200);
+        assert.equal(res.headers.get('x-astro-cache'), null);
+        assert.equal(textById(await res.text(), 'cart'), cart);
+        await sleep(30);
+      }
+    });
+
+    it('caches a server island that calls Astro.cache.set() itself', async () => {
+      const url = islandUrl(shell, 'SharedIsland');
+      const first = await site.fetch(url);
+      assert.equal(first.headers.get('x-astro-cache'), 'MISS');
+      const now = textById(await first.text(), 'shared');
+      await sleep(30);
+      const second = await site.fetch(url);
+      assert.equal(second.headers.get('x-astro-cache'), 'HIT');
+      assert.equal(textById(await second.text(), 'shared'), now);
+    });
+
+    it('makes a page that reads Astro.locals.buyer private, whatever the rule and headers say', async () => {
+      for (const country of ['US', 'CA']) {
+        const res = await site.fetch('/buyer', { headers: { 'oxygen-buyer-country': country } });
+        assert.equal(textById(await res.text(), 'country'), country);
+        assert.match(res.headers.get('cache-control') ?? '', /private, no-store/);
+        assert.equal(res.headers.get('oxygen-cache-control'), null);
+        assert.equal(res.headers.get('x-astro-cache'), null);
+        await sleep(30);
+      }
+    });
+  });
 });

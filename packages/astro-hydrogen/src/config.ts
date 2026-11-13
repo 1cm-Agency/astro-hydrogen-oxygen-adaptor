@@ -46,7 +46,11 @@ export interface OxygenRuntime {
 /** The Storefront client on `Astro.locals.storefront`. Queries accept a `cache` strategy. */
 export type HydrogenStorefrontClient = StorefrontClient<{ cache?: CachingStrategy }>;
 
-/** What the adapter puts on `Astro.locals`. */
+/**
+ * What the adapter puts on `Astro.locals`. Reading `buyer`, `shopifySession`, `customerSession` or
+ * `customerAccount` marks the response personalized: it is sent `private, no-store` and kept out of
+ * Oxygen's full-page cache and the route cache.
+ */
 export interface HydrogenLocals {
   /** Oxygen Worker values. Undefined while prerendering at build time. */
   oxygen?: OxygenRuntime;
