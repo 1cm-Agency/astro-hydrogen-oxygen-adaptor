@@ -1,0 +1,5 @@
+---
+Astro.response.headers.set('Oxygen-Cache-Control', 'public, max-age=60');
+const country = Astro.locals.buyer?.country ?? 'none';
+---
+<html><body><p id="country">{country}</p></body></html>

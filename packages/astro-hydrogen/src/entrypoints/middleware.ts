@@ -8,6 +8,9 @@ import type { HydrogenLocals } from '../config.js';
 import { matchShopifyRedirect, matchShopifyRoute, prepareHydrogenRequest } from '../runtime/hydrogen-request.js';
 import type { ShopifyRequestContext } from '@shopify/hydrogen';
 
+/** The route Astro serves `server:defer` components from. */
+const SERVER_ISLAND_ROUTE = '/_server-islands/[name]';
+
 export const onRequest: MiddlewareHandler = async (context, next) => {
   const locals = context.locals as HydrogenLocals;
   const isPrerendered = context.isPrerendered;
@@ -23,16 +26,34 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
 
   if (isPrerendered) return next();
 
-  locals.buyer = prepared.buyer;
+  // A server island exists to render what the cached page around it cannot: the buyer's own content.
+  // Route rules match its URL like any other path, and every buyer of a cached page requests the
+  // same island URL, so drop whatever a rule seeded. `Astro.cache.set()` inside the island opts back in.
+  if (context.routePattern === SERVER_ISLAND_ROUTE && context.cache?.enabled) context.cache.set(false);
+
   const sessionManager = prepared.sessionManager!;
-  locals.shopifySession = sessionManager;
-  if (prepared.customerSession) {
-    locals.customerSession = prepared.customerSession;
-    // Lazy, like `prepared.customerAccount`: creating the client validates the request origin.
-    Object.defineProperty(locals, 'customerAccount', {
+  // Reading any of these makes the response buyer-specific, so it must not be stored in a shared cache.
+  const buyerScoped = {
+    buyer: () => prepared.buyer,
+    shopifySession: () => sessionManager,
+    ...(prepared.customerSession && {
+      customerSession: () => prepared.customerSession,
+      // Also lazy in `prepared`: creating the client validates the request origin.
+      customerAccount: () => prepared.customerAccount,
+    }),
+  };
+  for (const [key, read] of Object.entries(buyerScoped)) {
+    Object.defineProperty(locals, key, {
       enumerable: true,
       configurable: true,
-      get: () => prepared.customerAccount,
+      get() {
+        prepared.requestContext.markResponseAsPersonalized(`Astro.locals.${key}`);
+        return read();
+      },
+      // Your own middleware may replace a value; it is then yours to keep out of caches.
+      set(value) {
+        Object.defineProperty(locals, key, { value, enumerable: true, configurable: true, writable: true });
+      },
     });
   }
 

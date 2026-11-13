@@ -1,0 +1,5 @@
+---
+// Buyer-specific through a raw cookie read, which nothing can detect.
+const cart = Astro.cookies.get('cart')?.value ?? 'none';
+---
+<p id="cart">{cart}</p>

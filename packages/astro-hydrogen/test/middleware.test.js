@@ -312,4 +312,50 @@ describe('middleware: finalizeResponse', () => {
     });
     assert.equal((await run('/p', { next: () => personal })).response.headers.get('oxygen-cache-control'), null);
   });
+
+  it('marks the response private once buyer-scoped locals are read', async () => {
+    const page = () => new Response('page', { headers: { 'oxygen-cache-control': 'public, max-age=60' } });
+
+    const untouched = await run('/p', { next: page });
+    assert.equal(untouched.response.headers.get('cache-control'), null);
+    assert.equal(untouched.response.headers.get('oxygen-cache-control'), 'public, max-age=60');
+
+    for (const key of ['buyer', 'shopifySession']) {
+      const url = new URL('https://shop.example/p');
+      const locals = { oxygen: { env: ENV, waitUntil() {}, cache: undefined } };
+      const response = await onRequest({ request: new Request(url), url, locals, isPrerendered: false }, async () => {
+        assert.ok(locals[key], key);
+        return page();
+      });
+      assert.match(response.headers.get('cache-control'), /private, no-store/, key);
+      assert.equal(response.headers.get('oxygen-cache-control'), null, key);
+    }
+  });
+
+  it('lets later middleware replace a buyer-scoped local', async () => {
+    const url = new URL('https://shop.example/p');
+    const locals = { oxygen: { env: ENV, waitUntil() {}, cache: undefined } };
+    const response = await onRequest({ request: new Request(url), url, locals, isPrerendered: false }, async () => {
+      locals.buyer = { isEuCountry: false, country: 'ZZ' };
+      assert.equal(locals.buyer.country, 'ZZ');
+      return new Response('page');
+    });
+    assert.equal(response.headers.get('cache-control'), null);
+  });
+
+  it('drops rule-seeded caching for server islands only', async () => {
+    const calls = [];
+    const cache = { enabled: true, set: (value) => calls.push(value) };
+    const url = new URL('https://shop.example/_server-islands/Cart');
+    const base = { request: new Request(url), url, isPrerendered: false, cache };
+    const locals = () => ({ oxygen: { env: ENV, waitUntil() {}, cache: undefined } });
+    const next = async () => new Response('island');
+
+    await onRequest({ ...base, locals: locals(), routePattern: '/products/[handle]' }, next);
+    assert.deepEqual(calls, []);
+    await onRequest({ ...base, locals: locals(), routePattern: '/_server-islands/[name]', cache: { ...cache, enabled: false } }, next);
+    assert.deepEqual(calls, []);
+    await onRequest({ ...base, locals: locals(), routePattern: '/_server-islands/[name]' }, next);
+    assert.deepEqual(calls, [false]);
+  });
 });

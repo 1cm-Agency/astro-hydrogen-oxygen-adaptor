@@ -2,6 +2,16 @@
 
 All notable changes to `astro-hydrogen` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow [Semantic Versioning](https://semver.org/) once it reaches 1.0.
 
+## [Unreleased]
+
+### Fixed
+
+- Server islands (`server:defer`) are no longer cached by a `routeRules` entry that happens to match their URL, such as `'/[...path]'`. With `oxygenCache()` and such a rule, the first buyer's island (a cart, a greeting) was served to every buyer of the cached page. An island is now cached only when it calls `Astro.cache.set()` itself.
+
+### Changed
+
+- Reading `Astro.locals.buyer`, `shopifySession`, `customerSession` or `customerAccount` marks the response personalized: it is sent with `Cache-Control: private, no-store`, loses `Oxygen-Cache-Control`, and is not stored by the route cache. Pages that read one of these and were cached before are no longer cached; move the buyer-specific part into a server island to keep caching the page.
+
 ## [0.1.2] - 2026-10-22
 
 ### Fixed

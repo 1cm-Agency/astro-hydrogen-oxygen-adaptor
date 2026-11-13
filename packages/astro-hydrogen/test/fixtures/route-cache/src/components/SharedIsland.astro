@@ -1,0 +1,7 @@
+---
+// The same for every buyer, and says so.
+Astro.cache.set({ maxAge: 60 });
+const now = Date.now();
+console.log(`render shared-island ${now}`);
+---
+<p id="shared">{now}</p>

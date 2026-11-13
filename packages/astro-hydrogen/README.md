@@ -170,7 +170,7 @@ Types are injected into `.astro/types.d.ts`, so `Astro.locals` is typed with no 
 | `storefront` | `HydrogenStorefrontClient` | Request-scoped Storefront API client. Queries accept `cache`. Available on prerendered pages too. |
 | `shopifyRequestContext` | `ShopifyRequestContext` | Hydrogen's request context: `i18n`, cookies, buyer IP, response header handling. Available on prerendered pages. |
 | `oxygen` | `{ env, waitUntil, cache }` | The Worker's environment bindings, `waitUntil`, and the `caches.open(cacheName)` store (`undefined` if the Cache API is unavailable). Undefined while prerendering. |
-| `buyer` | `OxygenBuyer` | Location and identity from `oxygen-buyer-*` headers. Undefined while prerendering. |
+| `buyer` | `OxygenBuyer` | Location and identity from `oxygen-buyer-*` headers. Undefined while prerendering. Reading it makes the response [private](#buyer-scoped-content), as does reading the session and customer values below. |
 | `shopifySession` | `HydrogenSessionManager` | The session Hydrogen's handlers use. See [Sessions](#sessions). Undefined while prerendering. |
 | `customerSession` | `CustomerSession` | `isLoggedIn`, `getAccessToken`, `getOrRefreshAccessToken`, `logout`. Only with `customerAccount` on; undefined while prerendering. |
 | `customerAccount` | `CustomerAccountClient` | Customer Account API client for the request. Only with `customerAccount` on; undefined while prerendering. |
@@ -451,7 +451,19 @@ Register the callback in the storefront's Customer Account API settings in the H
   ---
   ```
 
-  The adapter removes it from any response Hydrogen marks private or `no-store` (personalized queries, customer data, consent), and Hydrogen itself removes `CDN-Cache-Control` and `Surrogate-Control`. Still, do not set it on pages that depend on cookies, the session, or `buyer`, since those are not detected automatically.
+  The adapter removes it from any response Hydrogen marks private or `no-store` (personalized queries, customer data, consent), and Hydrogen itself removes `CDN-Cache-Control` and `Surrogate-Control`. See [Buyer-scoped content](#buyer-scoped-content) for what is detected.
+
+### Buyer-scoped content
+
+Content that differs per buyer is kept out of every shared cache by default:
+
+- **Reading `Astro.locals.buyer`, `shopifySession`, `customerSession` or `customerAccount`** marks the response personalized. It is sent with `Cache-Control: private, no-store`, loses its `Oxygen-Cache-Control` header, and is not stored by the route cache, whatever `routeRules` or `Astro.cache.set()` say.
+- **Server islands (`server:defer`) ignore `routeRules`.** A rule such as `'/[...path]'` also matches island URLs, and every buyer of a cached page requests the same island URL. An island is cached only when it calls `Astro.cache.set({ maxAge })` itself.
+
+Two things are not detected, so do not give such a page a `maxAge` or an `Oxygen-Cache-Control` header:
+
+- Reading cookies or request headers directly, such as `getCartId(Astro.request)` or `Astro.cookies.get()`, in a page. Put that content in a server island.
+- A buyer-scoped local first read by a child component after the page has started streaming, when the headers are already sent. Read it in the page's frontmatter.
 
 ### Route caching
 
@@ -481,7 +493,7 @@ Astro.cache.set({ maxAge: 60, swr: 300, tags: ['product-123'] });
 await cache.invalidate({ tags: 'product-123' }); // or { path: '/products/123' }
 ```
 
-- **What is cached:** GET responses with status 200 and a `maxAge`. Responses that set a cookie, send `Cache-Control: private` or `no-store`, or `Vary: Cookie` are never cached. Pages that depend on the visitor's session must not be given a `maxAge`. The cache key is the request origin plus the path and the sorted query string, so domains served by one deployment (markets, the preview domain) never share an entry; tracking parameters such as `utm_*` are ignored. `invalidate({ path })` clears that path on every domain.
+- **What is cached:** GET responses with status 200 and a `maxAge`. Responses that set a cookie, send `Cache-Control: private` or `no-store`, or `Vary: Cookie` are never cached. Server islands and pages that read buyer-scoped locals are left out; see [Buyer-scoped content](#buyer-scoped-content). The cache key is the request origin plus the path and the sorted query string, so domains served by one deployment (markets, the preview domain) never share an entry; tracking parameters such as `utm_*` are ignored. `invalidate({ path })` clears that path on every domain.
 - **Stale-while-revalidate is emulated.** The Cache API has no SWR, so each entry records when it was stored. Within `swr` seconds after `maxAge`, the stale page is served and a refresh is scheduled with `waitUntil`.
 - **Tags are best-effort.** Invalidation writes a marker per tag (and per path) that is checked on each lookup. The Oxygen cache is per data center and entries can be evicted, so an invalidation only takes effect in the data center that handled it; treat tags as a freshness hint, not a guarantee. Entries are kept at most 7 days.
 - **Environments:** works on Oxygen, in MiniOxygen and in `astro preview`. It does nothing in `astro dev` (Astro disables route caching there) or while prerendering in Node (one warning, requests pass through).
